@@ -1,0 +1,16 @@
+item_code,item_name,category,quantity,unit,min_stock,location
+G00130,Self-Heating Tomyam Steamboat 310G,Finished Goods,163,BOX,60,FG Store
+G00106,Self-Heating Curry Rice 260G,Finished Goods,80,BOX,50,FG Store
+MNF00006,Sarawak Kampua Mee Original 102G (8PKT/CTN),Finished Goods,709,PKT,1500,FG Store
+MNF00027,Kampua Mee Chili Limau Flavour 109G,Finished Goods,1513,PKT,1200,FG Store
+S00026,Tomyam Steamboat Paste 250G,Finished Goods,130,BOX,20,FG Store
+S00028,Tomato Steamboat Paste 375G,Finished Goods,222,BOX,20,FG Store
+G00148,Spicy Mala Soy Protein Meat 20PKT/BOX,Finished Goods,12589,PKT,100,FG Store
+G00151,BBQ Soy Protein Meat 20PKT/BOX,Finished Goods,3897,PKT,100,FG Store
+MNF00041,Shake Mee Toona Sinensis Flavour 92G 18CUP,Finished Goods,1976,CUP,450,FG Store
+MNF00040,Shake Mee Chili Lime Flavour 99G 18CUP,Finished Goods,272,CUP,450,FG Store
+MNF00046,Stand Pouch Sarawak Kampua Mee 102G,Finished Goods,8,PKT,0,FG Store
+MNF00047,Stand Pouch Kampua Mee Chili Lime Flavour 109G,Finished Goods,54,PKT,0,FG Store
+MNF00050,Green Tomyam Soup Noodle with Oat Milk,Finished Goods,1353,CUP,0,FG Store
+MNF00051,Green Tomyam Bean Vermicelli Soup with Oat Milk,Finished Goods,1061,PKT,0,FG Store
+MNF00034(T),Sarawak Kampua Mee Chili Lime 109G (Taiwan),Finished Goods - Export,224,PCS,0,FG Store
