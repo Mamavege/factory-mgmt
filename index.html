@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工厂管理系统</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+  :root {
+    --primary: #1a1a2e;
+    --primary-light: #16213e;
+    --accent: #0f3460;
+    --highlight: #e94560;
+    --highlight-soft: rgba(233,69,96,0.1);
+    --bg: #f5f6fa;
+    --surface: #ffffff;
+    --border: #e8eaed;
+    --text: #1a1a2e;
+    --text-muted: #6b7280;
+    --success: #10b981;
+    --success-bg: #ecfdf5;
+    --warning: #f59e0b;
+    --warning-bg: #fffbeb;
+    --danger: #ef4444;
+    --danger-bg: #fef2f2;
+    --info: #3b82f6;
+    --info-bg: #eff6ff;
+    --sidebar-w: 220px;
+    --radius: 10px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+  /* AUTH */
+  #auth-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--primary); }
+  .auth-card { background: var(--surface); border-radius: 16px; padding: 40px; width: 360px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+  .auth-logo { text-align: center; margin-bottom: 28px; }
+  .auth-logo .logo-icon { width: 52px; height: 52px; background: var(--highlight); border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+  .auth-logo .logo-icon i { font-size: 26px; color: white; }
+  .auth-logo h1 { font-size: 20px; font-weight: 700; color: var(--text); }
+  .auth-logo p { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+  .auth-tabs { display: flex; background: var(--bg); border-radius: 8px; padding: 3px; margin-bottom: 20px; }
+  .auth-tab { flex: 1; text-align: center; padding: 7px; font-size: 13px; border-radius: 6px; cursor: pointer; color: var(--text-muted); transition: all 0.2s; }
+  .auth-tab.active { background: white; color: var(--text); font-weight: 500; box-shadow: var(--shadow); }
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 14px; color: var(--text); background: white; transition: border 0.2s; outline: none; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--highlight); }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; text-decoration: none; }
+  .btn-primary { background: var(--highlight); color: white; width: 100%; justify-content: center; padding: 11px; }
+  .btn-primary:hover { background: #d63651; }
+  .btn-secondary { background: var(--bg); color: var(--text); border: 1.5px solid var(--border); }
+  .btn-secondary:hover { background: var(--border); }
+  .btn-danger { background: var(--danger-bg); color: var(--danger); border: 1.5px solid #fecaca; }
+  .btn-success { background: var(--success-bg); color: var(--success); border: 1.5px solid #a7f3d0; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .auth-error { background: var(--danger-bg); color: var(--danger); padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; display: none; }
+
+  /* APP LAYOUT */
+  #app { display: none; height: 100vh; overflow: hidden; }
+  .sidebar { width: var(--sidebar-w); background: var(--primary); height: 100vh; position: fixed; left: 0; top: 0; display: flex; flex-direction: column; z-index: 100; }
+  .sidebar-brand { padding: 20px 16px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .sidebar-brand .brand-icon { width: 34px; height: 34px; background: var(--highlight); border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+  .sidebar-brand .brand-icon i { font-size: 18px; color: white; }
+  .sidebar-brand h2 { font-size: 14px; font-weight: 700; color: white; }
+  .sidebar-brand p { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+  .sidebar-nav { flex: 1; padding: 12px 8px; overflow-y: auto; }
+  .nav-section { margin-bottom: 20px; }
+  .nav-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.3); padding: 0 8px; margin-bottom: 6px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; color: rgba(255,255,255,0.6); cursor: pointer; transition: all 0.15s; margin-bottom: 2px; font-size: 13px; }
+  .nav-item:hover { background: rgba(255,255,255,0.06); color: white; }
+  .nav-item.active { background: var(--highlight); color: white; }
+  .nav-item i { font-size: 17px; flex-shrink: 0; }
+  .nav-badge { margin-left: auto; background: var(--highlight); color: white; font-size: 10px; padding: 1px 6px; border-radius: 10px; }
+  .sidebar-footer { padding: 12px 8px; border-top: 1px solid rgba(255,255,255,0.08); }
+  .user-info { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+  .user-info:hover { background: rgba(255,255,255,0.06); }
+  .user-avatar { width: 30px; height: 30px; background: var(--highlight); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: white; flex-shrink: 0; }
+  .user-name { font-size: 12px; font-weight: 500; color: white; }
+  .user-role { font-size: 11px; color: rgba(255,255,255,0.4); }
+
+  /* MAIN CONTENT */
+  .main { margin-left: var(--sidebar-w); height: 100vh; overflow-y: auto; }
+  .topbar { background: white; border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+  .topbar h1 { font-size: 17px; font-weight: 700; }
+  .topbar-actions { display: flex; gap: 8px; align-items: center; }
+  .content { padding: 24px; }
+
+  /* CARDS & STATS */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: white; border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); border: 1px solid var(--border); }
+  .stat-card .stat-label { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .stat-card .stat-value { font-size: 28px; font-weight: 700; color: var(--text); line-height: 1; }
+  .stat-card .stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+  .stat-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+
+  /* TABLE */
+  .card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid var(--border); overflow: hidden; }
+  .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .card-title { font-size: 15px; font-weight: 600; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th { padding: 10px 16px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); background: var(--bg); border-bottom: 1px solid var(--border); font-weight: 600; }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg); }
+
+  /* BADGES */
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+  .badge-success { background: var(--success-bg); color: var(--success); }
+  .badge-warning { background: var(--warning-bg); color: var(--warning); }
+  .badge-danger { background: var(--danger-bg); color: var(--danger); }
+  .badge-info { background: var(--info-bg); color: var(--info); }
+  .badge-gray { background: #f3f4f6; color: #6b7280; }
+
+  /* SEARCH BAR */
+  .search-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .search-input { flex: 1; min-width: 200px; padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; }
+  .search-input:focus { border-color: var(--highlight); }
+  select.filter-select { padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; background: white; cursor: pointer; }
+
+  /* MODAL */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200; display: none; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: white; border-radius: 14px; padding: 28px; width: 480px; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+  .modal h2 { font-size: 17px; font-weight: 700; margin-bottom: 20px; }
+  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--text); color: white; padding: 12px 18px; border-radius: 10px; font-size: 13px; z-index: 999; transform: translateY(80px); opacity: 0; transition: all 0.3s; display: flex; align-items: center; gap: 8px; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { background: var(--success); }
+  .toast.error { background: var(--danger); }
+
+  /* EMPTY STATE */
+  .empty-state { text-align: center; padding: 48px 20px; color: var(--text-muted); }
+  .empty-state i { font-size: 40px; margin-bottom: 12px; display: block; opacity: 0.3; }
+  .empty-state p { font-size: 14px; }
+
+  /* AI PANEL */
+  .ai-panel { background: white; border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid var(--border); padding: 20px; }
+  .ai-messages { min-height: 200px; max-height: 400px; overflow-y: auto; margin-bottom: 16px; }
+  .ai-msg { margin-bottom: 12px; }
+  .ai-msg.user .bubble { background: var(--highlight); color: white; margin-left: auto; }
+  .ai-msg.assistant .bubble { background: var(--bg); color: var(--text); }
+  .bubble { display: inline-block; padding: 10px 14px; border-radius: 12px; font-size: 13px; max-width: 80%; line-height: 1.5; }
+  .ai-input-row { display: flex; gap: 8px; }
+  .ai-input { flex: 1; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; }
+  .ai-input:focus { border-color: var(--highlight); }
+
+  .loading { color: var(--text-muted); font-size: 13px; padding: 8px 0; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* CLOCK IN CARD */
+  .clock-card { background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%); border-radius: var(--radius); padding: 24px; color: white; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; }
+  .clock-time { font-size: 36px; font-weight: 700; letter-spacing: 2px; }
+  .clock-date { font-size: 13px; opacity: 0.7; margin-top: 4px; }
+  .clock-actions { display: flex; gap: 10px; }
+  .btn-clock-in { background: var(--success); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .btn-clock-out { background: var(--highlight); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+</style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="logo-icon"><i class="ti ti-building-factory-2"></i></div>
+      <h1>工厂管理系统</h1>
+      <p>生产部 · 仓库管理平台</p>
+    </div>
+    <div class="auth-tabs">
+      <div class="auth-tab active" onclick="switchAuthTab('login')">登录</div>
+      <div class="auth-tab" onclick="switchAuthTab('register')">注册账号</div>
+    </div>
+    <div id="auth-error" class="auth-error"></div>
+
+    <div id="login-form">
+      <div class="form-group">
+        <label>电子邮件</label>
+        <input type="email" id="login-email" placeholder="name@company.com">
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="login-password" placeholder="••••••••">
+      </div>
+      <button class="btn btn-primary" onclick="handleLogin()">
+        <i class="ti ti-login"></i> 登录
+      </button>
+    </div>
+
+    <div id="register-form" style="display:none">
+      <div class="form-group">
+        <label>姓名</label>
+        <input type="text" id="reg-name" placeholder="你的姓名">
+      </div>
+      <div class="form-group">
+        <label>电子邮件</label>
+        <input type="email" id="reg-email" placeholder="name@company.com">
+      </div>
+      <div class="form-group">
+        <label>密码（至少 6 位）</label>
+        <input type="password" id="reg-password" placeholder="••••••••">
+      </div>
+      <button class="btn btn-primary" onclick="handleRegister()">
+        <i class="ti ti-user-plus"></i> 注册
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon"><i class="ti ti-building-factory-2"></i></div>
+      <h2>工厂管理系统</h2>
+      <p>生产部 · 仓库管理</p>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-label">总览</div>
+        <div class="nav-item active" onclick="goTo('dashboard')">
+          <i class="ti ti-layout-dashboard"></i> 仪表盘
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">生产管理</div>
+        <div class="nav-item" onclick="goTo('workorders')">
+          <i class="ti ti-clipboard-list"></i> 工单管理
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">仓库管理</div>
+        <div class="nav-item" onclick="goTo('inventory')">
+          <i class="ti ti-box"></i> 库存管理
+        </div>
+        <div class="nav-item" onclick="goTo('transactions')">
+          <i class="ti ti-arrows-exchange"></i> 入库 / 出库
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">设备管理</div>
+        <div class="nav-item" onclick="goTo('equipment')">
+          <i class="ti ti-tool"></i> 设备列表
+        </div>
+        <div class="nav-item" onclick="goTo('maintenance')">
+          <i class="ti ti-alert-triangle"></i> 报修记录
+          <span class="nav-badge" id="repair-badge" style="display:none">0</span>
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">人员管理</div>
+        <div class="nav-item" onclick="goTo('attendance')">
+          <i class="ti ti-calendar-check"></i> 考勤打卡
+        </div>
+        <div class="nav-item admin-only" onclick="goTo('employees')" style="display:none">
+          <i class="ti ti-users"></i> 员工列表
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">AI 助手</div>
+        <div class="nav-item" onclick="goTo('ai')">
+          <i class="ti ti-robot"></i> AI 分析助手
+        </div>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info" onclick="handleLogout()">
+        <div class="user-avatar" id="sidebar-avatar">?</div>
+        <div>
+          <div class="user-name" id="sidebar-name">加载中...</div>
+          <div class="user-role" id="sidebar-role">退出登录</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <h1 id="page-title">仪表盘</h1>
+      <div class="topbar-actions" id="topbar-actions"></div>
+    </div>
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard">
+        <div class="stats-grid" id="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label"><div class="stat-icon" style="background:#fff0f3"><i class="ti ti-clipboard-list" style="color:var(--highlight)"></i></div> 进行中工单</div>
+            <div class="stat-value" id="stat-orders">—</div>
+            <div class="stat-sub">本月新增工单</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label"><div class="stat-icon" style="background:#f0fdf4"><i class="ti ti-box" style="color:var(--success)"></i></div> 库存品项</div>
+            <div class="stat-value" id="stat-inventory">—</div>
+            <div class="stat-sub">低库存预警</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label"><div class="stat-icon" style="background:#fffbeb"><i class="ti ti-tool" style="color:var(--warning)"></i></div> 待修设备</div>
+            <div class="stat-value" id="stat-equipment">—</div>
+            <div class="stat-sub">未处理报修</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label"><div class="stat-icon" style="background:#eff6ff"><i class="ti ti-users" style="color:var(--info)"></i></div> 今日出勤</div>
+            <div class="stat-value" id="stat-attendance">—</div>
+            <div class="stat-sub">已打卡人数</div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <div class="card">
+            <div class="card-header"><div class="card-title">最新工单</div></div>
+            <div id="dash-orders"><div class="loading" style="padding:16px">加载中...</div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">低库存预警</div></div>
+            <div id="dash-lowstock"><div class="loading" style="padding:16px">加载中...</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- WORK ORDERS -->
+      <div class="page" id="page-workorders">
+        <div class="search-bar">
+          <input class="search-input" id="wo-search" placeholder="搜索工单号 / 产品名称..." oninput="filterWorkOrders()">
+          <select class="filter-select" id="wo-status-filter" onchange="filterWorkOrders()">
+            <option value="">全部状态</option>
+            <option value="pending">待处理</option>
+            <option value="in_progress">进行中</option>
+            <option value="done">已完成</option>
+            <option value="cancelled">已取消</option>
+          </select>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>工单号</th><th>产品</th><th>数量</th><th>状态</th><th>负责人</th><th>创建时间</th><th>操作</th></tr></thead>
+              <tbody id="wo-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- INVENTORY -->
+      <div class="page" id="page-inventory">
+        <div class="search-bar">
+          <input class="search-input" id="inv-search" placeholder="搜索物料编号 / 名称..." oninput="filterInventory()">
+          <select class="filter-select" id="inv-cat-filter" onchange="filterInventory()">
+            <option value="">全部分类</option>
+          </select>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>物料编号</th><th>名称</th><th>分类</th><th>库存</th><th>单位</th><th>最低库存</th><th>位置</th><th>操作</th></tr></thead>
+              <tbody id="inv-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TRANSACTIONS -->
+      <div class="page" id="page-transactions">
+        <div class="search-bar">
+          <input class="search-input" id="tx-search" placeholder="搜索单据号 / 物料名称..." oninput="filterTransactions()">
+          <select class="filter-select" id="tx-type-filter" onchange="filterTransactions()">
+            <option value="">全部类型</option>
+            <option value="in">入库</option>
+            <option value="out">出库</option>
+          </select>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>时间</th><th>类型</th><th>物料</th><th>数量</th><th>原因</th><th>单据号</th><th>操作人</th></tr></thead>
+              <tbody id="tx-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- EQUIPMENT -->
+      <div class="page" id="page-equipment">
+        <div class="search-bar">
+          <input class="search-input" id="eq-search" placeholder="搜索设备编号 / 名称..." oninput="filterEquipment()">
+          <select class="filter-select" id="eq-status-filter" onchange="filterEquipment()">
+            <option value="">全部状态</option>
+            <option value="normal">正常</option>
+            <option value="maintenance">维护中</option>
+            <option value="broken">故障</option>
+          </select>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>设备编号</th><th>名称</th><th>位置</th><th>状态</th><th>上次维护</th><th>备注</th><th>操作</th></tr></thead>
+              <tbody id="eq-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- MAINTENANCE -->
+      <div class="page" id="page-maintenance">
+        <div class="search-bar">
+          <select class="filter-select" id="mt-status-filter" onchange="filterMaintenance()">
+            <option value="">全部状态</option>
+            <option value="open">待处理</option>
+            <option value="in_progress">处理中</option>
+            <option value="resolved">已解决</option>
+          </select>
+          <select class="filter-select" id="mt-type-filter" onchange="filterMaintenance()">
+            <option value="">全部类型</option>
+            <option value="repair">报修</option>
+            <option value="maintenance">维护</option>
+          </select>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>类型</th><th>设备</th><th>描述</th><th>状态</th><th>报修人</th><th>时间</th><th>操作</th></tr></thead>
+              <tbody id="mt-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ATTENDANCE -->
+      <div class="page" id="page-attendance">
+        <div class="clock-card">
+          <div>
+            <div class="clock-time" id="clock-display">00:00:00</div>
+            <div class="clock-date" id="clock-date-display">--</div>
+          </div>
+          <div class="clock-actions">
+            <button class="btn-clock-in" id="btn-clock-in" onclick="clockIn()">
+              <i class="ti ti-login"></i> 上班打卡
+            </button>
+            <button class="btn-clock-out" id="btn-clock-out" onclick="clockOut()">
+              <i class="ti ti-logout"></i> 下班打卡
+            </button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">考勤记录</div>
+            <select class="filter-select" id="att-filter" onchange="loadAttendance()">
+              <option value="self">我的考勤</option>
+              <option value="all" class="admin-only-opt" style="display:none">所有员工</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>日期</th><th>姓名</th><th>上班时间</th><th>下班时间</th><th>班次</th><th>状态</th></tr></thead>
+              <tbody id="att-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- EMPLOYEES (admin only) -->
+      <div class="page" id="page-employees">
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>姓名</th><th>邮箱</th><th>部门</th><th>角色</th><th>注册时间</th><th>操作</th></tr></thead>
+              <tbody id="emp-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI ASSISTANT -->
+      <div class="page" id="page-ai">
+        <div class="ai-panel">
+          <div class="ai-messages" id="ai-messages">
+            <div class="ai-msg assistant">
+              <div class="bubble">你好！我是你的工厂管理 AI 助手。我可以帮你分析库存状况、工单进度、设备维护建议，或解答任何管理问题。请问有什么可以帮你？</div>
+            </div>
+          </div>
+          <div class="ai-input-row">
+            <input class="ai-input" id="ai-input" placeholder="例如：目前有哪些低库存物料需要补货？" onkeydown="if(event.key==='Enter')sendAI()">
+            <button class="btn btn-primary" style="width:auto" onclick="sendAI()"><i class="ti ti-send"></i> 发送</button>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="quickAsk('目前有哪些工单进行中？进度如何？')">📋 工单进度</button>
+          <button class="btn btn-secondary btn-sm" onclick="quickAsk('哪些物料库存低于最低库存量？')">📦 补货建议</button>
+          <button class="btn btn-secondary btn-sm" onclick="quickAsk('目前有哪些设备需要维修或维护？')">🔧 设备状态</button>
+          <button class="btn btn-secondary btn-sm" onclick="quickAsk('今天有多少人出勤？')">👥 今日出勤</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- MODALS -->
+<!-- Work Order Modal -->
+<div class="modal-overlay" id="modal-wo">
+  <div class="modal">
+    <h2 id="modal-wo-title">新增工单</h2>
+    <input type="hidden" id="wo-id">
+    <div class="form-row">
+      <div class="form-group">
+        <label>工单号</label>
+        <input type="text" id="wo-order-no" placeholder="WO-2024-001">
+      </div>
+      <div class="form-group">
+        <label>产品名称</label>
+        <input type="text" id="wo-product" placeholder="产品名称">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>数量</label>
+        <input type="number" id="wo-qty" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>状态</label>
+        <select id="wo-status">
+          <option value="pending">待处理</option>
+          <option value="in_progress">进行中</option>
+          <option value="done">已完成</option>
+          <option value="cancelled">已取消</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>备注</label>
+      <textarea id="wo-notes" rows="3" placeholder="备注说明..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-wo')">取消</button>
+      <button class="btn btn-primary" style="width:auto" onclick="saveWorkOrder()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Inventory Modal -->
+<div class="modal-overlay" id="modal-inv">
+  <div class="modal">
+    <h2 id="modal-inv-title">新增物料</h2>
+    <input type="hidden" id="inv-id">
+    <div class="form-row">
+      <div class="form-group">
+        <label>物料编号</label>
+        <input type="text" id="inv-code" placeholder="MAT-001">
+      </div>
+      <div class="form-group">
+        <label>物料名称</label>
+        <input type="text" id="inv-name" placeholder="名称">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>分类</label>
+        <input type="text" id="inv-category" placeholder="原材料 / 零件...">
+      </div>
+      <div class="form-group">
+        <label>单位</label>
+        <input type="text" id="inv-unit" placeholder="pcs / kg / m...">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>当前库存</label>
+        <input type="number" id="inv-qty" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>最低库存</label>
+        <input type="number" id="inv-min" placeholder="0">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>存放位置</label>
+      <input type="text" id="inv-location" placeholder="A区-货架1">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-inv')">取消</button>
+      <button class="btn btn-primary" style="width:auto" onclick="saveInventory()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Transaction Modal -->
+<div class="modal-overlay" id="modal-tx">
+  <div class="modal">
+    <h2 id="modal-tx-title">入库 / 出库</h2>
+    <div class="form-group">
+      <label>类型</label>
+      <select id="tx-type">
+        <option value="in">入库</option>
+        <option value="out">出库</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>物料</label>
+      <select id="tx-item"></select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>数量</label>
+        <input type="number" id="tx-qty" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>单据号</label>
+        <input type="text" id="tx-ref" placeholder="PO-001">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>原因 / 备注</label>
+      <input type="text" id="tx-reason" placeholder="采购入库 / 生产领料...">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-tx')">取消</button>
+      <button class="btn btn-primary" style="width:auto" onclick="saveTransaction()">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- Equipment Modal -->
+<div class="modal-overlay" id="modal-eq">
+  <div class="modal">
+    <h2 id="modal-eq-title">新增设备</h2>
+    <input type="hidden" id="eq-id">
+    <div class="form-row">
+      <div class="form-group">
+        <label>设备编号</label>
+        <input type="text" id="eq-code" placeholder="EQ-001">
+      </div>
+      <div class="form-group">
+        <label>设备名称</label>
+        <input type="text" id="eq-name" placeholder="名称">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>位置</label>
+        <input type="text" id="eq-location" placeholder="生产线A">
+      </div>
+      <div class="form-group">
+        <label>状态</label>
+        <select id="eq-status">
+          <option value="normal">正常</option>
+          <option value="maintenance">维护中</option>
+          <option value="broken">故障</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>备注</label>
+      <textarea id="eq-notes" rows="2" placeholder="备注..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-eq')">取消</button>
+      <button class="btn btn-primary" style="width:auto" onclick="saveEquipment()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Maintenance Modal -->
+<div class="modal-overlay" id="modal-mt">
+  <div class="modal">
+    <h2>提交报修 / 维护</h2>
+    <div class="form-group">
+      <label>类型</label>
+      <select id="mt-type">
+        <option value="repair">报修</option>
+        <option value="maintenance">定期维护</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>设备</label>
+      <select id="mt-equipment"></select>
+    </div>
+    <div class="form-group">
+      <label>问题描述</label>
+      <textarea id="mt-desc" rows="3" placeholder="详细描述问题..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-mt')">取消</button>
+      <button class="btn btn-primary" style="width:auto" onclick="saveMaintenance()">提交</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"><i class="ti ti-check"></i> <span id="toast-msg"></span></div>
+
+<script>
+const SUPABASE_URL = 'https://ezzsrkwedadiqaghrvku.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6enNya3dlZGFkaXFhZ2hydmt1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMzI1NjYsImV4cCI6MjA5NjYwODU2Nn0.9Xm-HWk9Ggyd4bBYusp9tUUHgpIE-h-iMjbEvbPS0oU';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let currentProfile = null;
+let allWorkOrders = [], allInventory = [], allTransactions = [], allEquipment = [], allMaintenance = [];
+
+// ─── AUTH ───────────────────────────────────────
+function switchAuthTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='register')));
+  document.getElementById('login-form').style.display = tab==='login'?'block':'none';
+  document.getElementById('register-form').style.display = tab==='register'?'block':'none';
+  document.getElementById('auth-error').style.display = 'none';
+}
+
+async function handleLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-password').value;
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) showAuthError(error.message);
+}
+
+async function handleRegister() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pass = document.getElementById('reg-password').value;
+  if (!name) return showAuthError('请填写姓名');
+  const { error } = await sb.auth.signUp({ email, password: pass, options: { data: { name } } });
+  if (error) showAuthError(error.message);
+  else showAuthError('注册成功！请检查邮箱验证链接后登录。');
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg; el.style.display = 'block';
+}
+
+async function handleLogout() {
+  await sb.auth.signOut();
+  location.reload();
+}
+
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (session?.user) {
+    currentUser = session.user;
+    await loadProfile();
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    initApp();
+  } else {
+    document.getElementById('auth-screen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+  }
+});
+
+async function loadProfile() {
+  const { data } = await sb.from('profiles').select('*').eq('id', currentUser.id).single();
+  currentProfile = data;
+  const initials = (data?.name || 'U').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  document.getElementById('sidebar-avatar').textContent = initials;
+  document.getElementById('sidebar-name').textContent = data?.name || '—';
+  document.getElementById('sidebar-role').textContent = data?.role === 'admin' ? '管理员 · 退出' : '员工 · 退出';
+  if (data?.role === 'admin') {
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'flex');
+    document.querySelectorAll('.admin-only-opt').forEach(el => el.style.display = 'block');
+  }
+}
+
+// ─── NAVIGATION ─────────────────────────────────
+const pageTitles = { dashboard:'仪表盘', workorders:'工单管理', inventory:'库存管理', transactions:'入库 / 出库记录', equipment:'设备列表', maintenance:'报修 / 维护记录', attendance:'考勤打卡', employees:'员工列表', ai:'AI 分析助手' };
+const pageActions = {
+  workorders: () => currentProfile?.role==='admin' ? `<button class="btn btn-primary" style="width:auto" onclick="openWOModal()"><i class="ti ti-plus"></i> 新增工单</button>` : '',
+  inventory: () => currentProfile?.role==='admin' ? `<button class="btn btn-primary" style="width:auto" onclick="openInvModal()"><i class="ti ti-plus"></i> 新增物料</button>` : '',
+  transactions: () => `<button class="btn btn-primary" style="width:auto" onclick="openTxModal()"><i class="ti ti-plus"></i> 新增入/出库</button>`,
+  equipment: () => currentProfile?.role==='admin' ? `<button class="btn btn-primary" style="width:auto" onclick="openEqModal()"><i class="ti ti-plus"></i> 新增设备</button>` : '',
+  maintenance: () => `<button class="btn btn-primary" style="width:auto" onclick="openMtModal()"><i class="ti ti-alert-triangle"></i> 提交报修</button>`,
+};
+
+function goTo(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => { if (n.textContent.includes(pageTitles[page]?.slice(0,4))) n.classList.add('active'); });
+  document.getElementById('page-title').textContent = pageTitles[page] || page;
+  document.getElementById('topbar-actions').innerHTML = (pageActions[page] ? pageActions[page]() : '');
+  loadPage(page);
+}
+
+function loadPage(page) {
+  if (page==='dashboard') loadDashboard();
+  else if (page==='workorders') loadWorkOrders();
+  else if (page==='inventory') loadInventory();
+  else if (page==='transactions') loadTransactions();
+  else if (page==='equipment') loadEquipment();
+  else if (page==='maintenance') loadMaintenance();
+  else if (page==='attendance') loadAttendance();
+  else if (page==='employees') loadEmployees();
+}
+
+function initApp() {
+  startClock();
+  loadDashboard();
+  loadRepairBadge();
+}
+
+// ─── CLOCK ──────────────────────────────────────
+function startClock() {
+  function tick() {
+    const now = new Date();
+    document.getElementById('clock-display').textContent = now.toLocaleTimeString('ms-MY');
+    document.getElementById('clock-date-display').textContent = now.toLocaleDateString('zh-CN', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+  }
+  tick(); setInterval(tick, 1000);
+}
+
+// ─── DASHBOARD ──────────────────────────────────
+async function loadDashboard() {
+  const [wo, inv, mt, att] = await Promise.all([
+    sb.from('work_orders').select('*', {count:'exact'}).in('status',['pending','in_progress']),
+    sb.from('inventory').select('*'),
+    sb.from('maintenance_records').select('*', {count:'exact'}).eq('status','open'),
+    sb.from('attendance').select('*').eq('date', new Date().toISOString().slice(0,10))
+  ]);
+  document.getElementById('stat-orders').textContent = wo.count ?? 0;
+  document.getElementById('stat-inventory').textContent = inv.data?.length ?? 0;
+  document.getElementById('stat-equipment').textContent = mt.count ?? 0;
+  document.getElementById('stat-attendance').textContent = att.data?.length ?? 0;
+
+  // Recent orders
+  const { data: orders } = await sb.from('work_orders').select('*').order('created_at',{ascending:false}).limit(5);
+  document.getElementById('dash-orders').innerHTML = orders?.length ? `<table style="width:100%"><tbody>${orders.map(o=>`<tr><td style="padding:10px 16px"><strong>${o.order_no}</strong><br><small style="color:var(--text-muted)">${o.product_name}</small></td><td style="padding:10px 16px">${statusBadge(o.status,'wo')}</td></tr>`).join('')}</tbody></table>` : '<div class="empty-state"><p>暂无工单</p></div>';
+
+  // Low stock
+  const low = inv.data?.filter(i => i.quantity <= i.min_stock) || [];
+  document.getElementById('dash-lowstock').innerHTML = low.length ? `<table style="width:100%"><tbody>${low.map(i=>`<tr><td style="padding:10px 16px"><strong>${i.item_name}</strong><br><small style="color:var(--text-muted)">${i.item_code}</small></td><td style="padding:10px 16px"><span class="badge badge-danger">${i.quantity} ${i.unit}</span></td></tr>`).join('')}</tbody></table>` : '<div class="empty-state" style="padding:24px"><i class="ti ti-circle-check" style="font-size:28px;color:var(--success);opacity:1"></i><p>库存充足</p></div>';
+}
+
+// ─── WORK ORDERS ────────────────────────────────
+async function loadWorkOrders() {
+  const { data } = await sb.from('work_orders').select('*, assigned:profiles!assigned_to(name)').order('created_at',{ascending:false});
+  allWorkOrders = data || [];
+  renderWorkOrders(allWorkOrders);
+}
+
+function filterWorkOrders() {
+  const q = document.getElementById('wo-search').value.toLowerCase();
+  const s = document.getElementById('wo-status-filter').value;
+  renderWorkOrders(allWorkOrders.filter(o => (!q || o.order_no?.toLowerCase().includes(q) || o.product_name?.toLowerCase().includes(q)) && (!s || o.status===s)));
+}
+
+function renderWorkOrders(data) {
+  const isAdmin = currentProfile?.role === 'admin';
+  document.getElementById('wo-tbody').innerHTML = data.length ? data.map(o => `<tr>
+    <td><strong>${o.order_no}</strong></td>
+    <td>${o.product_name}</td>
+    <td>${o.quantity}</td>
+    <td>${statusBadge(o.status,'wo')}</td>
+    <td>${o.assigned?.name || '—'}</td>
+    <td>${fmtDate(o.created_at)}</td>
+    <td>${isAdmin ? `<button class="btn btn-secondary btn-sm" onclick="editWO('${o.id}')"><i class="ti ti-edit"></i></button> <button class="btn btn-danger btn-sm" onclick="deleteWO('${o.id}')"><i class="ti ti-trash"></i></button>` : `<button class="btn btn-secondary btn-sm" onclick="updateWOStatus('${o.id}', '${o.status}')"><i class="ti ti-refresh"></i></button>`}</td>
+  </tr>`).join('') : '<tr><td colspan="7"><div class="empty-state"><i class="ti ti-clipboard-list"></i><p>暂无工单</p></div></td></tr>';
+}
+
+function openWOModal(data=null) {
+  document.getElementById('modal-wo-title').textContent = data ? '编辑工单' : '新增工单';
+  document.getElementById('wo-id').value = data?.id || '';
+  document.getElementById('wo-order-no').value = data?.order_no || '';
+  document.getElementById('wo-product').value = data?.product_name || '';
+  document.getElementById('wo-qty').value = data?.quantity || '';
+  document.getElementById('wo-status').value = data?.status || 'pending';
+  document.getElementById('wo-notes').value = data?.notes || '';
+  openModal('modal-wo');
+}
+
+async function editWO(id) { const o = allWorkOrders.find(x=>x.id===id); openWOModal(o); }
+
+async function saveWorkOrder() {
+  const id = document.getElementById('wo-id').value;
+  const payload = { order_no: document.getElementById('wo-order-no').value, product_name: document.getElementById('wo-product').value, quantity: parseInt(document.getElementById('wo-qty').value), status: document.getElementById('wo-status').value, notes: document.getElementById('wo-notes').value, created_by: currentUser.id };
+  const { error } = id ? await sb.from('work_orders').update(payload).eq('id',id) : await sb.from('work_orders').insert(payload);
+  if (error) return toast('保存失败：'+error.message,'error');
+  closeModal('modal-wo'); toast('工单已保存'); loadWorkOrders();
+}
+
+async function deleteWO(id) {
+  if (!confirm('确定删除此工单？')) return;
+  await sb.from('work_orders').delete().eq('id',id);
+  toast('已删除'); loadWorkOrders();
+}
+
+async function updateWOStatus(id, current) {
+  const next = {pending:'in_progress', in_progress:'done', done:'done', cancelled:'cancelled'}[current];
+  if (current === 'done') return toast('工单已完成');
+  await sb.from('work_orders').update({status:next}).eq('id',id);
+  toast('状态已更新'); loadWorkOrders();
+}
+
+// ─── INVENTORY ──────────────────────────────────
+async function loadInventory() {
+  const { data } = await sb.from('inventory').select('*').order('item_name');
+  allInventory = data || [];
+  const cats = [...new Set(data.map(i=>i.category).filter(Boolean))];
+  const sel = document.getElementById('inv-cat-filter');
+  sel.innerHTML = '<option value="">全部分类</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+  renderInventory(allInventory);
+}
+
+function filterInventory() {
+  const q = document.getElementById('inv-search').value.toLowerCase();
+  const c = document.getElementById('inv-cat-filter').value;
+  renderInventory(allInventory.filter(i => (!q || i.item_code?.toLowerCase().includes(q) || i.item_name?.toLowerCase().includes(q)) && (!c || i.category===c)));
+}
+
+function renderInventory(data) {
+  const isAdmin = currentProfile?.role === 'admin';
+  document.getElementById('inv-tbody').innerHTML = data.length ? data.map(i => `<tr>
+    <td><strong>${i.item_code}</strong></td>
+    <td>${i.item_name}</td>
+    <td>${i.category || '—'}</td>
+    <td><span class="${i.quantity <= i.min_stock ? 'badge badge-danger' : 'badge badge-success'}">${i.quantity}</span></td>
+    <td>${i.unit}</td>
+    <td>${i.min_stock}</td>
+    <td>${i.location || '—'}</td>
+    <td>${isAdmin ? `<button class="btn btn-secondary btn-sm" onclick="editInv('${i.id}')"><i class="ti ti-edit"></i></button> <button class="btn btn-danger btn-sm" onclick="deleteInv('${i.id}')"><i class="ti ti-trash"></i></button>` : '—'}</td>
+  </tr>`).join('') : '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-box"></i><p>暂无库存物料</p></div></td></tr>';
+}
+
+function openInvModal(data=null) {
+  document.getElementById('modal-inv-title').textContent = data ? '编辑物料' : '新增物料';
+  document.getElementById('inv-id').value = data?.id || '';
+  document.getElementById('inv-code').value = data?.item_code || '';
+  document.getElementById('inv-name').value = data?.item_name || '';
+  document.getElementById('inv-category').value = data?.category || '';
+  document.getElementById('inv-unit').value = data?.unit || 'pcs';
+  document.getElementById('inv-qty').value = data?.quantity || '0';
+  document.getElementById('inv-min').value = data?.min_stock || '0';
+  document.getElementById('inv-location').value = data?.location || '';
+  openModal('modal-inv');
+}
+
+async function editInv(id) { const i = allInventory.find(x=>x.id===id); openInvModal(i); }
+
+async function saveInventory() {
+  const id = document.getElementById('inv-id').value;
+  const payload = { item_code: document.getElementById('inv-code').value, item_name: document.getElementById('inv-name').value, category: document.getElementById('inv-category').value, unit: document.getElementById('inv-unit').value, quantity: parseInt(document.getElementById('inv-qty').value)||0, min_stock: parseInt(document.getElementById('inv-min').value)||0, location: document.getElementById('inv-location').value, updated_at: new Date().toISOString() };
+  const { error } = id ? await sb.from('inventory').update(payload).eq('id',id) : await sb.from('inventory').insert(payload);
+  if (error) return toast('保存失败：'+error.message,'error');
+  closeModal('modal-inv'); toast('物料已保存'); loadInventory();
+}
+
+async function deleteInv(id) {
+  if (!confirm('确定删除此物料？')) return;
+  await sb.from('inventory').delete().eq('id',id);
+  toast('已删除'); loadInventory();
+}
+
+// ─── TRANSACTIONS ────────────────────────────────
+async function loadTransactions() {
+  const { data } = await sb.from('stock_transactions').select('*, item:inventory(item_name,item_code), creator:profiles!created_by(name)').order('created_at',{ascending:false}).limit(100);
+  allTransactions = data || [];
+  renderTransactions(allTransactions);
+}
+
+function filterTransactions() {
+  const q = document.getElementById('tx-search').value.toLowerCase();
+  const t = document.getElementById('tx-type-filter').value;
+  renderTransactions(allTransactions.filter(x => (!q || x.item?.item_name?.toLowerCase().includes(q) || x.reference_no?.toLowerCase().includes(q)) && (!t || x.type===t)));
+}
+
+function renderTransactions(data) {
+  document.getElementById('tx-tbody').innerHTML = data.length ? data.map(x => `<tr>
+    <td>${fmtDate(x.created_at)}</td>
+    <td><span class="badge ${x.type==='in'?'badge-success':'badge-warning'}">${x.type==='in'?'入库':'出库'}</span></td>
+    <td>${x.item?.item_name || '—'}<br><small style="color:var(--text-muted)">${x.item?.item_code||''}</small></td>
+    <td><strong>${x.quantity}</strong></td>
+    <td>${x.reason || '—'}</td>
+    <td>${x.reference_no || '—'}</td>
+    <td>${x.creator?.name || '—'}</td>
+  </tr>`).join('') : '<tr><td colspan="7"><div class="empty-state"><i class="ti ti-arrows-exchange"></i><p>暂无记录</p></div></td></tr>';
+}
+
+async function openTxModal() {
+  const { data } = await sb.from('inventory').select('id,item_code,item_name').order('item_name');
+  document.getElementById('tx-item').innerHTML = data.map(i=>`<option value="${i.id}">${i.item_code} — ${i.item_name}</option>`).join('');
+  document.getElementById('tx-type').value = 'in';
+  document.getElementById('tx-qty').value = '';
+  document.getElementById('tx-ref').value = '';
+  document.getElementById('tx-reason').value = '';
+  openModal('modal-tx');
+}
+
+async function saveTransaction() {
+  const type = document.getElementById('tx-type').value;
+  const itemId = document.getElementById('tx-item').value;
+  const qty = parseInt(document.getElementById('tx-qty').value)||0;
+  const ref = document.getElementById('tx-ref').value;
+  const reason = document.getElementById('tx-reason').value;
+  if (!qty) return toast('请输入数量','error');
+
+  const { data: item } = await sb.from('inventory').select('quantity').eq('id',itemId).single();
+  const newQty = type==='in' ? item.quantity + qty : item.quantity - qty;
+  if (newQty < 0) return toast('出库数量超过库存！','error');
+
+  const { error } = await sb.from('stock_transactions').insert({ item_id:itemId, type, quantity:qty, reference_no:ref, reason, created_by:currentUser.id });
+  if (error) return toast('保存失败：'+error.message,'error');
+  await sb.from('inventory').update({quantity:newQty, updated_at:new Date().toISOString()}).eq('id',itemId);
+  closeModal('modal-tx'); toast(type==='in'?'入库成功':'出库成功'); loadTransactions();
+}
+
+// ─── EQUIPMENT ──────────────────────────────────
+async function loadEquipment() {
+  const { data } = await sb.from('equipment').select('*').order('equipment_code');
+  allEquipment = data || [];
+  renderEquipment(allEquipment);
+}
+
+function filterEquipment() {
+  const q = document.getElementById('eq-search').value.toLowerCase();
+  const s = document.getElementById('eq-status-filter').value;
+  renderEquipment(allEquipment.filter(e => (!q || e.equipment_code?.toLowerCase().includes(q) || e.name?.toLowerCase().includes(q)) && (!s || e.status===s)));
+}
+
+function renderEquipment(data) {
+  const isAdmin = currentProfile?.role === 'admin';
+  document.getElementById('eq-tbody').innerHTML = data.length ? data.map(e => `<tr>
+    <td><strong>${e.equipment_code}</strong></td>
+    <td>${e.name}</td>
+    <td>${e.location||'—'}</td>
+    <td>${statusBadge(e.status,'eq')}</td>
+    <td>${e.last_maintenance ? fmtDate(e.last_maintenance) : '—'}</td>
+    <td>${e.notes||'—'}</td>
+    <td>${isAdmin ? `<button class="btn btn-secondary btn-sm" onclick="editEq('${e.id}')"><i class="ti ti-edit"></i></button> <button class="btn btn-danger btn-sm" onclick="deleteEq('${e.id}')"><i class="ti ti-trash"></i></button>` : `<button class="btn btn-secondary btn-sm" onclick="reportRepair('${e.id}')"><i class="ti ti-alert-triangle"></i> 报修</button>`}</td>
+  </tr>`).join('') : '<tr><td colspan="7"><div class="empty-state"><i class="ti ti-tool"></i><p>暂无设备</p></div></td></tr>';
+}
+
+function openEqModal(data=null) {
+  document.getElementById('modal-eq-title').textContent = data ? '编辑设备' : '新增设备';
+  document.getElementById('eq-id').value = data?.id || '';
+  document.getElementById('eq-code').value = data?.equipment_code || '';
+  document.getElementById('eq-name').value = data?.name || '';
+  document.getElementById('eq-location').value = data?.location || '';
+  document.getElementById('eq-status').value = data?.status || 'normal';
+  document.getElementById('eq-notes').value = data?.notes || '';
+  openModal('modal-eq');
+}
+
+async function editEq(id) { const e = allEquipment.find(x=>x.id===id); openEqModal(e); }
+
+async function saveEquipment() {
+  const id = document.getElementById('eq-id').value;
+  const payload = { equipment_code: document.getElementById('eq-code').value, name: document.getElementById('eq-name').value, location: document.getElementById('eq-location').value, status: document.getElementById('eq-status').value, notes: document.getElementById('eq-notes').value };
+  const { error } = id ? await sb.from('equipment').update(payload).eq('id',id) : await sb.from('equipment').insert(payload);
+  if (error) return toast('保存失败：'+error.message,'error');
+  closeModal('modal-eq'); toast('设备已保存'); loadEquipment();
+}
+
+async function deleteEq(id) {
+  if (!confirm('确定删除此设备？')) return;
+  await sb.from('equipment').delete().eq('id',id);
+  toast('已删除'); loadEquipment();
+}
+
+// ─── MAINTENANCE ────────────────────────────────
+async function loadMaintenance() {
+  const { data } = await sb.from('maintenance_records').select('*, equipment(name,equipment_code), reporter:profiles!reported_by(name)').order('created_at',{ascending:false});
+  allMaintenance = data || [];
+  renderMaintenance(allMaintenance);
+  const open = data?.filter(x=>x.status==='open').length || 0;
+  const badge = document.getElementById('repair-badge');
+  badge.textContent = open; badge.style.display = open ? 'inline-block' : 'none';
+}
+
+function filterMaintenance() {
+  const s = document.getElementById('mt-status-filter').value;
+  const t = document.getElementById('mt-type-filter').value;
+  renderMaintenance(allMaintenance.filter(m => (!s||m.status===s) && (!t||m.type===t)));
+}
+
+function renderMaintenance(data) {
+  const isAdmin = currentProfile?.role === 'admin';
+  document.getElementById('mt-tbody').innerHTML = data.length ? data.map(m => `<tr>
+    <td><span class="badge ${m.type==='repair'?'badge-danger':'badge-info'}">${m.type==='repair'?'报修':'维护'}</span></td>
+    <td>${m.equipment?.name||'—'}<br><small style="color:var(--text-muted)">${m.equipment?.equipment_code||''}</small></td>
+    <td>${m.description}</td>
+    <td>${statusBadge(m.status,'mt')}</td>
+    <td>${m.reporter?.name||'—'}</td>
+    <td>${fmtDate(m.created_at)}</td>
+    <td>${isAdmin && m.status!=='resolved' ? `<button class="btn btn-success btn-sm" onclick="resolveMt('${m.id}')"><i class="ti ti-check"></i> 解决</button>` : '—'}</td>
+  </tr>`).join('') : '<tr><td colspan="7"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>暂无记录</p></div></td></tr>';
+}
+
+async function openMtModal() {
+  const { data } = await sb.from('equipment').select('id,equipment_code,name').order('name');
+  document.getElementById('mt-equipment').innerHTML = data.map(e=>`<option value="${e.id}">${e.equipment_code} — ${e.name}</option>`).join('');
+  document.getElementById('mt-type').value = 'repair';
+  document.getElementById('mt-desc').value = '';
+  openModal('modal-mt');
+}
+
+async function reportRepair(eqId) { await openMtModal(); document.getElementById('mt-equipment').value = eqId; }
+
+async function saveMaintenance() {
+  const payload = { equipment_id: document.getElementById('mt-equipment').value, type: document.getElementById('mt-type').value, description: document.getElementById('mt-desc').value, reported_by: currentUser.id };
+  if (!payload.description) return toast('请填写描述','error');
+  const { error } = await sb.from('maintenance_records').insert(payload);
+  if (error) return toast('提交失败：'+error.message,'error');
+  await sb.from('equipment').update({status:payload.type==='repair'?'broken':'maintenance'}).eq('id',payload.equipment_id);
+  closeModal('modal-mt'); toast('报修已提交'); loadMaintenance();
+}
+
+async function resolveMt(id) {
+  const m = allMaintenance.find(x=>x.id===id);
+  await sb.from('maintenance_records').update({status:'resolved', resolved_by:currentUser.id, resolved_at:new Date().toISOString()}).eq('id',id);
+  await sb.from('equipment').update({status:'normal', last_maintenance:new Date().toISOString()}).eq('id',m.equipment_id);
+  toast('已标记解决'); loadMaintenance();
+}
+
+async function loadRepairBadge() {
+  const { count } = await sb.from('maintenance_records').select('*',{count:'exact'}).eq('status','open');
+  const badge = document.getElementById('repair-badge');
+  badge.textContent = count; badge.style.display = count ? 'inline-block' : 'none';
+}
+
+// ─── ATTENDANCE ──────────────────────────────────
+async function loadAttendance() {
+  const filter = document.getElementById('att-filter')?.value || 'self';
+  let query = sb.from('attendance').select('*, user:profiles(name)').order('date',{ascending:false}).limit(30);
+  if (filter==='self') query = query.eq('user_id', currentUser.id);
+  const { data } = await query;
+  document.getElementById('att-tbody').innerHTML = data?.length ? data.map(a=>`<tr>
+    <td>${a.date}</td>
+    <td>${a.user?.name||'—'}</td>
+    <td>${a.clock_in ? new Date(a.clock_in).toLocaleTimeString('ms-MY') : '—'}</td>
+    <td>${a.clock_out ? new Date(a.clock_out).toLocaleTimeString('ms-MY') : '—'}</td>
+    <td>${a.shift==='day'?'日班':'夜班'}</td>
+    <td>${statusBadge(a.status,'att')}</td>
+  </tr>`).join('') : '<tr><td colspan="6"><div class="empty-state"><i class="ti ti-calendar"></i><p>暂无记录</p></div></td></tr>';
+}
+
+async function clockIn() {
+  const today = new Date().toISOString().slice(0,10);
+  const { data: existing } = await sb.from('attendance').select('*').eq('user_id',currentUser.id).eq('date',today).single();
+  if (existing?.clock_in) return toast('今天已经打过上班卡了','error');
+  const hour = new Date().getHours();
+  const shift = (hour >= 6 && hour < 18) ? 'day' : 'night';
+  const { error } = existing
+    ? await sb.from('attendance').update({clock_in:new Date().toISOString()}).eq('id',existing.id)
+    : await sb.from('attendance').insert({user_id:currentUser.id, date:today, clock_in:new Date().toISOString(), shift, status:'present'});
+  if (error) return toast('打卡失败：'+error.message,'error');
+  toast('上班打卡成功 ✓'); loadAttendance();
+}
+
+async function clockOut() {
+  const today = new Date().toISOString().slice(0,10);
+  const { data: existing } = await sb.from('attendance').select('*').eq('user_id',currentUser.id).eq('date',today).single();
+  if (!existing?.clock_in) return toast('请先打上班卡','error');
+  if (existing?.clock_out) return toast('今天已经打过下班卡了','error');
+  await sb.from('attendance').update({clock_out:new Date().toISOString()}).eq('id',existing.id);
+  toast('下班打卡成功 ✓'); loadAttendance();
+}
+
+// ─── EMPLOYEES ──────────────────────────────────
+async function loadEmployees() {
+  const { data } = await sb.from('profiles').select('*, auth_user:id').order('name');
+  document.getElementById('emp-tbody').innerHTML = data?.length ? data.map(e=>`<tr>
+    <td><strong>${e.name}</strong></td>
+    <td>${currentUser.email||'—'}</td>
+    <td>${e.department||'—'}</td>
+    <td><span class="badge ${e.role==='admin'?'badge-danger':'badge-info'}">${e.role==='admin'?'管理员':'员工'}</span></td>
+    <td>${fmtDate(e.created_at)}</td>
+    <td>${e.id!==currentUser.id ? `<button class="btn btn-secondary btn-sm" onclick="toggleRole('${e.id}','${e.role}')"><i class="ti ti-arrows-exchange"></i> 切换角色</button>` : '（本人）'}</td>
+  </tr>`).join('') : '<tr><td colspan="6"><div class="empty-state"><p>暂无员工</p></div></td></tr>';
+}
+
+async function toggleRole(id, current) {
+  const next = current==='admin' ? 'employee' : 'admin';
+  if (!confirm(`确定将此员工改为 ${next==='admin'?'管理员':'普通员工'}？`)) return;
+  await sb.from('profiles').update({role:next}).eq('id',id);
+  toast('角色已更新'); loadEmployees();
+}
+
+// ─── AI ASSISTANT ────────────────────────────────
+async function sendAI() {
+  const input = document.getElementById('ai-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  appendAIMsg('user', msg);
+  const thinking = appendAIMsg('assistant', '思考中...');
+
+  const [orders, inventory, equipment, maintenance, attendance] = await Promise.all([
+    sb.from('work_orders').select('*').order('created_at',{ascending:false}).limit(20),
+    sb.from('inventory').select('*'),
+    sb.from('equipment').select('*'),
+    sb.from('maintenance_records').select('*, equipment(name)').eq('status','open'),
+    sb.from('attendance').select('*').eq('date', new Date().toISOString().slice(0,10))
+  ]);
+
+  const ctx = `你是一个工厂管理系统的AI助手，只用中文回答，回答简洁专业。当前工厂数据：
+工单（最近20条）：${JSON.stringify(orders.data?.map(o=>({no:o.order_no,product:o.product_name,qty:o.quantity,status:o.status})))}
+库存：${JSON.stringify(inventory.data?.map(i=>({code:i.item_code,name:i.item_name,qty:i.quantity,min:i.min_stock,unit:i.unit})))}
+设备状态：${JSON.stringify(equipment.data?.map(e=>({code:e.equipment_code,name:e.name,status:e.status})))}
+待处理报修：${JSON.stringify(maintenance.data?.map(m=>({equip:m.equipment?.name,desc:m.description})))}
+今日出勤人数：${attendance.data?.length || 0}人`;
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, system: ctx, messages:[{role:'user',content:msg}] })
+  });
+  const data = await resp.json();
+  const reply = data.content?.[0]?.text || '抱歉，无法获取回答。';
+  thinking.querySelector('.bubble').textContent = reply;
+}
+
+function quickAsk(q) { document.getElementById('ai-input').value = q; sendAI(); }
+
+function appendAIMsg(role, text) {
+  const el = document.createElement('div');
+  el.className = `ai-msg ${role}`;
+  el.innerHTML = `<div class="bubble">${text}</div>`;
+  const container = document.getElementById('ai-messages');
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+  return el;
+}
+
+// ─── HELPERS ────────────────────────────────────
+function statusBadge(status, type) {
+  const map = {
+    wo: { pending:'badge-gray', in_progress:'badge-info', done:'badge-success', cancelled:'badge-danger' },
+    eq: { normal:'badge-success', maintenance:'badge-warning', broken:'badge-danger' },
+    mt: { open:'badge-danger', in_progress:'badge-warning', resolved:'badge-success' },
+    att: { present:'badge-success', absent:'badge-danger', late:'badge-warning', leave:'badge-info' }
+  };
+  const labels = { pending:'待处理', in_progress:'进行中', done:'已完成', cancelled:'已取消', normal:'正常', maintenance:'维护中', broken:'故障', open:'待处理', resolved:'已解决', present:'出勤', absent:'缺勤', late:'迟到', leave:'请假' };
+  return `<span class="badge ${map[type]?.[status]||'badge-gray'}">${labels[status]||status}</span>`;
+}
+
+function fmtDate(dt) {
+  if (!dt) return '—';
+  return new Date(dt).toLocaleDateString('zh-CN', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); }));
+
+let toastTimer;
+function toast(msg, type='success') {
+  const el = document.getElementById('toast');
+  const icon = type==='error' ? 'ti-alert-circle' : 'ti-check';
+  el.className = `toast ${type}`;
+  el.innerHTML = `<i class="ti ${icon}"></i> <span>${msg}</span>`;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove('show'), 3000);
+}
+<</script>
+</body>
+</html>
