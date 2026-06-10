@@ -910,6 +910,11 @@ async function handleLogout() {
 }
 
 sb.auth.onAuthStateChange(async (event, session) => {
+  // If token is expired, sign out cleanly instead of getting stuck loading
+  if (event === 'TOKEN_REFRESHED' && !session) {
+    await sb.auth.signOut();
+    return;
+  }
   if (session?.user) {
     currentUser = session.user;
     await ensureProfile(session.user);
@@ -918,10 +923,20 @@ sb.auth.onAuthStateChange(async (event, session) => {
     document.getElementById('app').style.display = 'flex';
     initApp();
   } else {
+    currentUser = null;
+    currentProfile = null;
     document.getElementById('auth-screen').style.display = 'flex';
     document.getElementById('app').style.display = 'none';
   }
 });
+
+// On page load, check for stale/invalid session and clear it
+(async () => {
+  const { data: { session }, error } = await sb.auth.getSession();
+  if (error || (!session && localStorage.getItem('supabase.auth.token'))) {
+    await sb.auth.signOut();
+  }
+})();
 
 async function ensureProfile(user) {
   const { data } = await sb.from('profiles').select('id').eq('id', user.id).single();
