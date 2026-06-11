@@ -966,11 +966,29 @@ async function handleLogin() {
   if (!email || !pass) return showAuthMsg('Please fill in all fields.');
   const btn = document.getElementById('btn-login');
   btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i> Signing in…';
-  // Clear any stale session data before signing in
-  await sb.auth.signOut();
-  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-  btn.disabled = false; btn.innerHTML = '<i class="ti ti-login"></i> Sign In';
-  if (error) showAuthMsg(error.message);
+
+  // Wipe all local storage to guarantee a clean state
+  localStorage.clear();
+  sessionStorage.clear();
+
+  try {
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+    btn.disabled = false; btn.innerHTML = '<i class="ti ti-login"></i> Sign In';
+    if (error) return showAuthMsg(error.message);
+    // Manually trigger app load in case onAuthStateChange doesn't fire
+    if (data?.user && !appInitialized) {
+      appInitialized = true;
+      currentUser = data.user;
+      await ensureProfile(data.user);
+      await loadProfile();
+      document.getElementById('auth-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'flex';
+      initApp();
+    }
+  } catch(e) {
+    btn.disabled = false; btn.innerHTML = '<i class="ti ti-login"></i> Sign In';
+    showAuthMsg('Connection error. Please try again.');
+  }
 }
 
 async function handleRegister() {
