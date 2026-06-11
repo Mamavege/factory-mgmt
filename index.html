@@ -48,6 +48,7 @@
   }
   @keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
   .auth-logo { text-align: center; margin-bottom: 32px; }
+  .auth-logo .brand-img { max-width: 200px; height: auto; margin-bottom: 8px; }
   .auth-logo .logo-icon {
     width: 56px; height: 56px;
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
@@ -323,8 +324,7 @@
 <div id="auth-screen">
   <div class="auth-card">
     <div class="auth-logo">
-      <div class="logo-icon"><i class="ti ti-building-factory-2"></i></div>
-      <h1>Factory<span>OS</span></h1>
+      <div style="font-family:'Georgia',serif;font-size:42px;font-weight:900;color:#d01a1a;text-shadow:2px 2px 0 #fff,-2px -2px 0 #fff,2px -2px 0 #fff,-2px 2px 0 #fff,3px 3px 6px rgba(0,0,0,0.15);letter-spacing:-1px;line-height:1;margin-bottom:6px;font-style:italic;">Mama Vege</div>
       <p>Production &amp; Warehouse Management</p>
     </div>
     <div class="auth-tabs">
@@ -374,9 +374,8 @@
   <div class="sidebar">
     <div class="sidebar-brand">
       <div class="brand-logo">
-        <div class="brand-icon"><i class="ti ti-building-factory-2"></i></div>
         <div class="brand-text">
-          <h2>FactoryOS</h2>
+          <div style="font-family:'Georgia',serif;font-size:22px;font-weight:900;color:#e82222;text-shadow:1px 1px 0 #fff,-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff;letter-spacing:-0.5px;font-style:italic;line-height:1;">Mama Vege</div>
           <p>Management System</p>
         </div>
       </div>
@@ -1038,11 +1037,7 @@ async function handleRegister() {
 
 async function handleLogout() {
   await sb.auth.signOut();
-  appInitialized = false;
-  currentUser = null;
-  currentProfile = null;
-  document.getElementById('auth-screen').style.display = 'flex';
-  document.getElementById('app').style.display = 'none';
+  location.reload();
 }
 
 let appInitialized = false;
