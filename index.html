@@ -796,12 +796,15 @@
     </div>
     <div class="form-group">
       <label>Item</label>
-      <select id="tx-item"></select>
+      <select id="tx-item" onchange="onTxItemChange()"></select>
     </div>
     <div class="form-row">
       <div class="form-group">
         <label>Quantity</label>
-        <input type="number" id="tx-qty" placeholder="0">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="number" id="tx-qty" placeholder="0" style="flex:1">
+          <span id="tx-uom" style="font-size:13px;font-weight:700;color:var(--accent);min-width:32px;text-align:center"></span>
+        </div>
       </div>
       <div class="form-group">
         <label>Reference No.</label>
@@ -1257,12 +1260,25 @@ function renderTransactions(data) {
     <td><strong>${x.quantity}</strong></td><td>${x.reason||'—'}</td><td>${x.reference_no||'—'}</td><td>${x.creator?.name||'—'}</td>
   </tr>`).join('') : '<tr><td colspan="7"><div class="empty-state"><i class="ti ti-arrows-exchange"></i><p>No transactions yet</p></div></td></tr>';
 }
+let txItemsCache = [];
 async function openTxModal() {
-  const { data } = await sb.from('inventory').select('id,item_code,item_name').order('item_name');
+  const { data } = await sb.from('inventory').select('id,item_code,item_name,unit,quantity').order('item_name');
+  txItemsCache = data || [];
   document.getElementById('tx-item').innerHTML = data.map(i=>`<option value="${i.id}">${i.item_code} — ${i.item_name}</option>`).join('');
   document.getElementById('tx-type').value='in'; document.getElementById('tx-qty').value='';
   document.getElementById('tx-ref').value=''; document.getElementById('tx-reason').value='';
+  onTxItemChange();
   openModal('modal-tx');
+}
+function onTxItemChange() {
+  const itemId = document.getElementById('tx-item').value;
+  const item = txItemsCache.find(i => i.id === itemId);
+  const uomEl = document.getElementById('tx-uom');
+  if (item?.unit) {
+    uomEl.textContent = item.unit;
+  } else {
+    uomEl.textContent = '';
+  }
 }
 async function saveTransaction() {
   const type=document.getElementById('tx-type').value, itemId=document.getElementById('tx-item').value;
