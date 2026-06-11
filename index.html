@@ -523,6 +523,23 @@
             <div id="cal-detail-list"></div>
           </div>
         </div>
+
+        <!-- PRODUCTION OUTPUT CHART -->
+        <div class="card" style="margin-top:16px">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-chart-bar" style="margin-right:8px;color:var(--accent)"></i>Production Output by Item</div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <select id="chart-period" onchange="renderProductionChart()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px">
+                <option value="7">Last 7 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="90">Last 90 days</option>
+              </select>
+            </div>
+          </div>
+          <div style="padding:16px 20px 20px">
+            <div id="production-chart" style="overflow-x:auto"></div>
+          </div>
+        </div>
       </div>
 
       <!-- WORK ORDERS -->
@@ -579,6 +596,7 @@
           </select>
           <input type="date" class="filter-select" id="tx-date-from" onchange="filterTransactions()" title="From date">
           <input type="date" class="filter-select" id="tx-date-to" onchange="filterTransactions()" title="To date">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap;cursor:pointer"><input type="checkbox" id="tx-show-deleted" onchange="filterTransactions()"> Show Deleted</label>
           <button class="btn btn-secondary" onclick="exportTransactionsCSV()" style="white-space:nowrap"><i class="ti ti-download"></i> Export CSV</button>
         </div>
         <div class="card">
@@ -839,9 +857,16 @@
     <div class="form-row">
       <div class="form-group">
         <label>Type</label>
-        <select id="tx-type">
+        <select id="tx-type" onchange="toggleTxSource()">
           <option value="in">Stock In</option>
           <option value="out">Stock Out</option>
+        </select>
+      </div>
+      <div class="form-group" id="tx-source-group">
+        <label>Stock In Source</label>
+        <select id="tx-source">
+          <option value="production">Production Output</option>
+          <option value="adjustment">Stock Adjustment</option>
         </select>
       </div>
       <div class="form-group">
@@ -1201,6 +1226,53 @@ async function loadDashboard() {
         <td style="padding:12px 18px"><span class="badge badge-danger">${i.quantity} ${i.unit}</span></td>
       </tr>`).join('')}</tbody></table>`
     : '<div class="empty-state" style="padding:28px"><i class="ti ti-circle-check" style="font-size:32px;color:var(--success);opacity:1"></i><p>All stock levels OK</p></div>';
+
+  renderProductionChart();
+}
+async function renderProductionChart() {
+  const days = parseInt(document.getElementById('chart-period')?.value||30);
+  const since = new Date(Date.now() - days*86400000).toISOString();
+  const { data: fresh } = await sb.from('stock_transactions')
+    .select('quantity, inventory_id, item:inventory(item_name,item_code)')
+    .eq('type','in').eq('source','production')
+    .is('deleted_at',null)
+    .gte('created_at', since);
+  const data = fresh || [];
+  // Aggregate by item
+  const totals = {};
+  data.forEach(x => {
+    const key = x.item?.item_name || x.inventory_id;
+    totals[key] = (totals[key]||0) + (x.quantity||0);
+  });
+  const entries = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+  const container = document.getElementById('production-chart');
+  if (!container) return;
+  if (!entries.length) {
+    container.innerHTML = '<div class="empty-state" style="padding:28px"><i class="ti ti-chart-bar"></i><p>No production output recorded yet.<br>Tag stock-ins as "Production Output" to see data here.</p></div>';
+    return;
+  }
+  const max = entries[0][1] || 1;
+  const colors = ['#6c63ff','#ff6584','#43c6a8','#f59e0b','#3b82f6','#ef4444','#10b981','#8b5cf6','#f97316','#06b6d4'];
+  container.innerHTML = `<div style="min-width:${Math.max(entries.length*90,400)}px">
+    <div style="display:flex;align-items:flex-end;gap:12px;height:220px;padding-bottom:8px;border-bottom:2px solid var(--border)">
+      ${entries.map(([name,qty],i)=>{
+        const pct = Math.max((qty/max)*100, 3);
+        const color = colors[i%colors.length];
+        const shortName = name.length>18 ? name.slice(0,16)+'…' : name;
+        return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:70px">
+          <div style="font-size:11px;font-weight:700;color:${color};margin-bottom:4px">${qty}</div>
+          <div style="width:100%;max-width:60px;height:${pct}%;background:${color};border-radius:6px 6px 0 0;transition:height 0.3s" title="${name}: ${qty}"></div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="display:flex;gap:12px;margin-top:8px">
+      ${entries.map(([name],i)=>{
+        const color = colors[i%colors.length];
+        const shortName = name.length>18 ? name.slice(0,16)+'…' : name;
+        return `<div style="flex:1;min-width:70px;text-align:center;font-size:10px;color:var(--text-muted);overflow:hidden" title="${name}">${shortName}</div>`;
+      }).join('')}
+    </div>
+  </div>`;
 }
 
 // ─── WORK ORDERS ────────────────────────────────────
@@ -1347,7 +1419,9 @@ function getFilteredTransactions() {
   const cat = document.getElementById('tx-category-filter').value;
   const from = document.getElementById('tx-date-from').value;
   const to = document.getElementById('tx-date-to').value;
+  const showDeleted = document.getElementById('tx-show-deleted')?.checked;
   return allTransactions.filter(x => {
+    if (!showDeleted && x.deleted_at) return false;
     const dateStr = x.created_at?.slice(0,10) || '';
     const itemCat = allInventory.find(i=>i.id===x.inventory_id)?.category || '';
     return (!q || x.item?.item_name?.toLowerCase().includes(q) || x.reference_no?.toLowerCase().includes(q))
@@ -1360,19 +1434,22 @@ function getFilteredTransactions() {
 function filterTransactions() { renderTransactions(getFilteredTransactions()); }
 function renderTransactions(data) {
   const isAdmin = currentProfile?.role==='admin';
-  document.getElementById('tx-tbody').innerHTML = data.length ? data.map(x=>`<tr>
+  document.getElementById('tx-tbody').innerHTML = data.length ? data.map(x=>{
+    const deleted = !!x.deleted_at;
+    const rowStyle = deleted ? 'opacity:0.5;text-decoration:line-through;background:#fff5f5' : '';
+    return `<tr style="${rowStyle}">
     <td>${fmtDate(x.created_at)}</td>
-    <td><span class="badge ${x.type==='in'?'badge-success':'badge-warning'}">${x.type==='in'?'Stock In':'Stock Out'}</span></td>
+    <td>${deleted ? '<span class="badge badge-danger">Deleted</span>' : `<span class="badge ${x.type==='in'?'badge-success':'badge-warning'}">${x.type==='in'?'Stock In':'Stock Out'}</span>`}</td>
     <td>${x.item?.item_name||'—'}</td>
     <td><small style="color:var(--text-muted)">${x.item?.item_code||'—'}</small></td>
     <td><strong>${x.quantity}</strong></td>
     <td>${x.item_unit||x.item?.unit||'—'}</td>
     <td>${x.reason||'—'}</td><td>${x.reference_no||'—'}</td><td>${x.creator?.name||'—'}</td>
-    <td>${isAdmin?`<button class="btn btn-secondary btn-sm" onclick="editTx('${x.id}')"><i class="ti ti-edit"></i></button> <button class="btn btn-danger btn-sm" onclick="deleteTx('${x.id}')"><i class="ti ti-trash"></i></button>`:'—'}</td>
-  </tr>`).join('') : '<tr><td colspan="10"><div class="empty-state"><i class="ti ti-arrows-exchange"></i><p>No transactions found</p></div></td></tr>';
+    <td>${isAdmin && !deleted ? `<button class="btn btn-secondary btn-sm" onclick="editTx('${x.id}')"><i class="ti ti-edit"></i></button> <button class="btn btn-danger btn-sm" onclick="deleteTx('${x.id}')"><i class="ti ti-trash"></i></button>` : '—'}</td>
+  </tr>`;}).join('') : '<tr><td colspan="10"><div class="empty-state"><i class="ti ti-arrows-exchange"></i><p>No transactions found</p></div></td></tr>';
 }
 function exportTransactionsCSV() {
-  const data = getFilteredTransactions();
+  const data = getFilteredTransactions().filter(x => !x.deleted_at);
   if (!data.length) return toast('No data to export', 'error');
   const from = document.getElementById('tx-date-from').value;
   const to = document.getElementById('tx-date-to').value;
@@ -1403,6 +1480,10 @@ function exportTransactionsCSV() {
 }
 let txItemsCache = [];
 let txLineCount = 0;
+function toggleTxSource() {
+  const type = document.getElementById('tx-type').value;
+  document.getElementById('tx-source-group').style.display = type==='in' ? '' : 'none';
+}
 async function openTxModal() {
   const { data } = await sb.from('inventory').select('id,item_code,item_name,unit,quantity').order('item_name');
   txItemsCache = data || [];
@@ -1413,6 +1494,8 @@ async function openTxModal() {
   document.getElementById('tx-old-qty').value='';
   document.getElementById('tx-old-type').value='';
   document.getElementById('tx-type').value='in';
+  document.getElementById('tx-source').value='production';
+  toggleTxSource();
   document.getElementById('tx-ref').value='';
   document.getElementById('tx-reason').value='';
   document.getElementById('tx-lines').innerHTML='';
@@ -1502,6 +1585,8 @@ async function editTx(id) {
   document.getElementById('tx-old-qty').value = tx.quantity;
   document.getElementById('tx-old-type').value = tx.type;
   document.getElementById('tx-type').value = tx.type;
+  document.getElementById('tx-source').value = tx.source||'production';
+  toggleTxSource();
   document.getElementById('tx-ref').value = tx.reference_no||'';
   document.getElementById('tx-reason').value = tx.reason||'';
   document.getElementById('tx-lines').innerHTML='';
@@ -1521,12 +1606,13 @@ async function deleteTx(id) {
       await sb.from('inventory').update({quantity:Math.max(0,reversed),updated_at:new Date().toISOString()}).eq('id',itemId);
     }
   }
-  await sb.from('stock_transactions').delete().eq('id',id);
+  await sb.from('stock_transactions').update({deleted_at: new Date().toISOString()}).eq('id',id);
   toast('Transaction deleted'); loadTransactions();
 }
 async function saveTransaction() {
   const txId = document.getElementById('tx-id').value;
   const type = document.getElementById('tx-type').value;
+  const source = type==='in' ? document.getElementById('tx-source').value : null;
   const ref = document.getElementById('tx-ref').value;
   const reason = document.getElementById('tx-reason').value;
   if (txId) {
@@ -1550,7 +1636,7 @@ async function saveTransaction() {
     const { data: item } = await sb.from('inventory').select('quantity').eq('id',itemId).single();
     const newQty = type==='in' ? item.quantity+qty : item.quantity-qty;
     if (newQty<0) return toast('Insufficient stock!','error');
-    const { error } = await sb.from('stock_transactions').update({type,quantity:qty,reference_no:ref,reason,item_id:itemId}).eq('id',txId);
+    const { error } = await sb.from('stock_transactions').update({type,source,quantity:qty,reference_no:ref,reason,item_id:itemId}).eq('id',txId);
     if (error) return toast('Save failed: '+error.message,'error');
     await sb.from('inventory').update({quantity:newQty,updated_at:new Date().toISOString()}).eq('id',itemId);
     closeModal('modal-tx'); toast('Transaction updated'); loadTransactions();
@@ -1575,7 +1661,7 @@ async function saveTransaction() {
     for (const l of lines) {
       const { data: item } = await sb.from('inventory').select('quantity').eq('id',l.itemId).single();
       const newQty = type==='in' ? item.quantity+l.qty : item.quantity-l.qty;
-      await sb.from('stock_transactions').insert({item_id:l.itemId,type,quantity:l.qty,reference_no:ref,reason,created_by:currentUser.id});
+      await sb.from('stock_transactions').insert({item_id:l.itemId,type,source,quantity:l.qty,reference_no:ref,reason,created_by:currentUser.id});
       await sb.from('inventory').update({quantity:newQty,updated_at:new Date().toISOString()}).eq('id',l.itemId);
     }
     closeModal('modal-tx');
