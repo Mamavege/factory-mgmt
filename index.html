@@ -568,11 +568,14 @@
             <option value="in">Stock In</option>
             <option value="out">Stock Out</option>
           </select>
+          <input type="date" class="filter-select" id="tx-date-from" onchange="filterTransactions()" title="From date">
+          <input type="date" class="filter-select" id="tx-date-to" onchange="filterTransactions()" title="To date">
+          <button class="btn btn-secondary" onclick="exportTransactionsCSV()" style="white-space:nowrap"><i class="ti ti-download"></i> Export CSV</button>
         </div>
         <div class="card">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Time</th><th>Type</th><th>Item</th><th>Qty</th><th>Reason</th><th>Reference</th><th>By</th></tr></thead>
+              <thead><tr><th>Time</th><th>Type</th><th>Item</th><th>Item Code</th><th>Qty</th><th>UOM</th><th>Reason</th><th>Reference</th><th>By</th></tr></thead>
               <tbody id="tx-tbody"></tbody>
             </table>
           </div>
@@ -1243,22 +1246,64 @@ async function deleteInv(id) {
 
 // ─── TRANSACTIONS ────────────────────────────────────
 async function loadTransactions() {
-  const { data } = await sb.from('stock_transactions').select('*, item:inventory(item_name,item_code), creator:profiles!created_by(name)').order('created_at',{ascending:false}).limit(100);
+  const { data } = await sb.from('stock_transactions').select('*, item:inventory(item_name,item_code,unit), creator:profiles!created_by(name)').order('created_at',{ascending:false}).limit(500);
   allTransactions = data || [];
   renderTransactions(allTransactions);
 }
-function filterTransactions() {
+function getFilteredTransactions() {
   const q = document.getElementById('tx-search').value.toLowerCase();
   const t = document.getElementById('tx-type-filter').value;
-  renderTransactions(allTransactions.filter(x=>(!q||x.item?.item_name?.toLowerCase().includes(q)||x.reference_no?.toLowerCase().includes(q))&&(!t||x.type===t)));
+  const from = document.getElementById('tx-date-from').value;
+  const to = document.getElementById('tx-date-to').value;
+  return allTransactions.filter(x => {
+    const dateStr = x.created_at?.slice(0,10) || '';
+    return (!q || x.item?.item_name?.toLowerCase().includes(q) || x.reference_no?.toLowerCase().includes(q))
+      && (!t || x.type === t)
+      && (!from || dateStr >= from)
+      && (!to || dateStr <= to);
+  });
 }
+function filterTransactions() { renderTransactions(getFilteredTransactions()); }
 function renderTransactions(data) {
   document.getElementById('tx-tbody').innerHTML = data.length ? data.map(x=>`<tr>
     <td>${fmtDate(x.created_at)}</td>
     <td><span class="badge ${x.type==='in'?'badge-success':'badge-warning'}">${x.type==='in'?'Stock In':'Stock Out'}</span></td>
-    <td>${x.item?.item_name||'—'}<br><small style="color:var(--text-muted)">${x.item?.item_code||''}</small></td>
-    <td><strong>${x.quantity}</strong></td><td>${x.reason||'—'}</td><td>${x.reference_no||'—'}</td><td>${x.creator?.name||'—'}</td>
-  </tr>`).join('') : '<tr><td colspan="7"><div class="empty-state"><i class="ti ti-arrows-exchange"></i><p>No transactions yet</p></div></td></tr>';
+    <td>${x.item?.item_name||'—'}</td>
+    <td><small style="color:var(--text-muted)">${x.item?.item_code||'—'}</small></td>
+    <td><strong>${x.quantity}</strong></td>
+    <td>${x.item_unit||x.item?.unit||'—'}</td>
+    <td>${x.reason||'—'}</td><td>${x.reference_no||'—'}</td><td>${x.creator?.name||'—'}</td>
+  </tr>`).join('') : '<tr><td colspan="9"><div class="empty-state"><i class="ti ti-arrows-exchange"></i><p>No transactions found</p></div></td></tr>';
+}
+function exportTransactionsCSV() {
+  const data = getFilteredTransactions();
+  if (!data.length) return toast('No data to export', 'error');
+  const from = document.getElementById('tx-date-from').value;
+  const to = document.getElementById('tx-date-to').value;
+  if (!from || !to) return toast('Please select a date range to export', 'error');
+  const rows = [['Date','Type','Item Name','Item Code','Quantity','UOM','Reason','Reference No.','Recorded By']];
+  data.forEach(x => {
+    rows.push([
+      x.created_at?.slice(0,10) || '',
+      x.type === 'in' ? 'Stock In' : 'Stock Out',
+      x.item?.item_name || '',
+      x.item?.item_code || '',
+      x.quantity,
+      x.item_unit || x.item?.unit || '',
+      x.reason || '',
+      x.reference_no || '',
+      x.creator?.name || ''
+    ]);
+  });
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `stock-report_${from}_to_${to}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`Exported ${data.length} records`);
 }
 let txItemsCache = [];
 async function openTxModal() {
