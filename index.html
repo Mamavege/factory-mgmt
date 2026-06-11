@@ -1232,16 +1232,17 @@ async function loadDashboard() {
 async function renderProductionChart() {
   const days = parseInt(document.getElementById('chart-period')?.value||30);
   const since = new Date(Date.now() - days*86400000).toISOString();
-  const { data: fresh } = await sb.from('stock_transactions')
-    .select('quantity, inventory_id, item:inventory(item_name,item_code)')
+  const { data: fresh, error: chartErr } = await sb.from('stock_transactions')
+    .select('quantity, item_id, item:inventory!item_id(item_name,item_code)')
     .eq('type','in').eq('source','production')
     .is('deleted_at',null)
     .gte('created_at', since);
+  if (chartErr) { console.error('Chart query error:', chartErr); }
   const data = fresh || [];
   // Aggregate by item
   const totals = {};
   data.forEach(x => {
-    const key = x.item?.item_name || x.inventory_id;
+    const key = x.item?.item_name || x.item_id || 'Unknown';
     totals[key] = (totals[key]||0) + (x.quantity||0);
   });
   const entries = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
@@ -1409,7 +1410,7 @@ async function saveReserve() {
 
 // ─── TRANSACTIONS ────────────────────────────────────
 async function loadTransactions() {
-  const { data } = await sb.from('stock_transactions').select('*, item:inventory(item_name,item_code,unit), creator:profiles!created_by(name)').order('created_at',{ascending:false}).limit(500);
+  const { data } = await sb.from('stock_transactions').select('*, item:inventory!item_id(item_name,item_code,unit), creator:profiles!created_by(name)').order('created_at',{ascending:false}).limit(500);
   allTransactions = data || [];
   renderTransactions(allTransactions);
 }
