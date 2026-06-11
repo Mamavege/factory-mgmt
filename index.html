@@ -837,9 +837,10 @@
       </div>
       <div class="form-group">
         <label>Reserved Qty (Units)</label>
-        <input type="number" id="reserve-qty" placeholder="0" min="0">
+        <input type="number" id="reserve-qty" placeholder="0" min="0" oninput="validateReserveQty()">
       </div>
     </div>
+    <div id="reserve-avail-msg" style="font-size:12px;margin:-8px 0 8px;font-weight:600"></div>
     <div class="form-group">
       <label>Reserve Location</label>
       <input type="text" id="reserve-location" placeholder="e.g. Reserved Zone B">
@@ -1420,12 +1421,29 @@ function openReserveModal(id) {
   document.getElementById('reserve-qty').value = item.reserved_qty||0;
   document.getElementById('reserve-location').value = item.reserved_location||'';
   openModal('modal-reserve');
+  setTimeout(validateReserveQty, 50);
+}
+function validateReserveQty() {
+  const total = parseInt(document.getElementById('reserve-total').value)||0;
+  const qty = parseInt(document.getElementById('reserve-qty').value)||0;
+  const avail = total - qty;
+  const msg = document.getElementById('reserve-avail-msg');
+  const btn = document.querySelector('#modal-reserve .btn-primary');
+  if (qty > total) {
+    msg.style.color = 'var(--danger)';
+    msg.textContent = `⚠ Exceeds total stock by ${qty - total} units — cannot save`;
+    if (btn) btn.disabled = true;
+  } else {
+    msg.style.color = avail === 0 ? 'var(--warning)' : 'var(--success)';
+    msg.textContent = `Available after reservation: ${avail} units`;
+    if (btn) btn.disabled = false;
+  }
 }
 async function saveReserve() {
   const id = document.getElementById('reserve-inv-id').value;
   const total = parseInt(document.getElementById('reserve-total').value)||0;
   const qty = parseInt(document.getElementById('reserve-qty').value)||0;
-  if (qty > total) return toast('Reserved qty cannot exceed total stock','error');
+  if (qty > total) return toast(`Reserved qty cannot exceed total stock (${total} units)`,'error');
   const location = document.getElementById('reserve-location').value.trim();
   const { error } = await sb.from('inventory').update({ reserved_qty: qty, reserved_location: location||null }).eq('id',id);
   if (error) return toast('Save failed: '+error.message,'error');
