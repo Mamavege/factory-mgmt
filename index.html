@@ -1765,11 +1765,11 @@ const WIP_STATIONS = [
 ];
 let allWip = [];
 async function loadWip() {
-  const today = new Date().toISOString().slice(0,10);
-  const { data } = await sb.from('wip_entries')
-    .select('*, creator:profiles!created_by(name)')
+  const { data, error } = await sb.from('wip_entries')
+    .select('*')
     .order('created_at',{ascending:false}).limit(200);
-  allWip = data || [];
+  if (error) { toast('Load failed: '+error.message,'error'); allWip=[]; }
+  else allWip = data || [];
   renderWipStations();
 }
 function renderWipStations() {
