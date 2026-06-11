@@ -1028,11 +1028,21 @@ sb.auth.onAuthStateChange(async (event, session) => {
   }
 });
 
-// On page load, check for stale/invalid session and clear it
+// On page load, clear any stale session and force fresh auth state
 (async () => {
+  const APP_VERSION = '20260611-4';
+  const storedVersion = localStorage.getItem('app_version');
+  if (storedVersion !== APP_VERSION) {
+    // New deployment detected — clear all auth state
+    await sb.auth.signOut();
+    localStorage.clear();
+    localStorage.setItem('app_version', APP_VERSION);
+    return;
+  }
   const { data: { session }, error } = await sb.auth.getSession();
   if (error || (!session && localStorage.getItem('supabase.auth.token'))) {
     await sb.auth.signOut();
+    localStorage.removeItem('supabase.auth.token');
   }
 })();
 
