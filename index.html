@@ -966,6 +966,8 @@ async function handleLogin() {
   if (!email || !pass) return showAuthMsg('Please fill in all fields.');
   const btn = document.getElementById('btn-login');
   btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i> Signing in…';
+  // Clear any stale session data before signing in
+  await sb.auth.signOut();
   const { error } = await sb.auth.signInWithPassword({ email, password: pass });
   btn.disabled = false; btn.innerHTML = '<i class="ti ti-login"></i> Sign In';
   if (error) showAuthMsg(error.message);
@@ -1007,24 +1009,25 @@ async function handleLogout() {
   location.reload();
 }
 
+let appInitialized = false;
 sb.auth.onAuthStateChange(async (event, session) => {
-  // If token is expired, sign out cleanly instead of getting stuck loading
-  if (event === 'TOKEN_REFRESHED' && !session) {
-    await sb.auth.signOut();
+  if (event === 'SIGNED_OUT') {
+    appInitialized = false;
+    currentUser = null;
+    currentProfile = null;
+    document.getElementById('auth-screen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
     return;
   }
-  if (session?.user) {
+  if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+    if (appInitialized) return; // prevent duplicate init
+    appInitialized = true;
     currentUser = session.user;
     await ensureProfile(session.user);
     await loadProfile();
     document.getElementById('auth-screen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
     initApp();
-  } else {
-    currentUser = null;
-    currentProfile = null;
-    document.getElementById('auth-screen').style.display = 'flex';
-    document.getElementById('app').style.display = 'none';
   }
 });
 
