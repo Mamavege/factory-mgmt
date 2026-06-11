@@ -936,10 +936,9 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: false,
-    storageKey: 'factoryos-auth'
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false
   }
 });
 
@@ -974,8 +973,6 @@ async function handleLogin() {
   const btn = document.getElementById('btn-login');
   btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i> Signing in…';
   appInitialized = false;
-  // Clear stale auth token
-  localStorage.removeItem('factoryos-auth');
   try {
     const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
     if (error) {
@@ -1030,7 +1027,11 @@ async function handleRegister() {
 
 async function handleLogout() {
   await sb.auth.signOut();
-  location.reload();
+  appInitialized = false;
+  currentUser = null;
+  currentProfile = null;
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
 }
 
 let appInitialized = false;
@@ -1055,23 +1056,8 @@ sb.auth.onAuthStateChange(async (event, session) => {
   }
 });
 
-// On page load, clear any stale session and force fresh auth state
-(async () => {
-  const APP_VERSION = '20260611-4';
-  const storedVersion = localStorage.getItem('app_version');
-  if (storedVersion !== APP_VERSION) {
-    // New deployment detected — clear all auth state
-    await sb.auth.signOut();
-    localStorage.clear();
-    localStorage.setItem('app_version', APP_VERSION);
-    return;
-  }
-  const { data: { session }, error } = await sb.auth.getSession();
-  if (error || (!session && localStorage.getItem('supabase.auth.token'))) {
-    await sb.auth.signOut();
-    localStorage.removeItem('supabase.auth.token');
-  }
-})();
+// Clear any legacy stale Supabase keys from previous versions
+Object.keys(localStorage).filter(k => k.startsWith('sb-') || k === 'supabase.auth.token' || k === 'factoryos-auth').forEach(k => localStorage.removeItem(k));
 
 async function ensureProfile(user) {
   const { data } = await sb.from('profiles').select('id').eq('id', user.id).single();
