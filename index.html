@@ -1607,7 +1607,7 @@ async function deleteTx(id) {
     }
   }
   await sb.from('stock_transactions').update({deleted_at: new Date().toISOString()}).eq('id',id);
-  toast('Transaction deleted'); loadTransactions();
+  toast('Transaction deleted'); loadTransactions(); renderProductionChart();
 }
 async function saveTransaction() {
   const txId = document.getElementById('tx-id').value;
@@ -1639,7 +1639,7 @@ async function saveTransaction() {
     const { error } = await sb.from('stock_transactions').update({type,source,quantity:qty,reference_no:ref,reason,item_id:itemId}).eq('id',txId);
     if (error) return toast('Save failed: '+error.message,'error');
     await sb.from('inventory').update({quantity:newQty,updated_at:new Date().toISOString()}).eq('id',itemId);
-    closeModal('modal-tx'); toast('Transaction updated'); loadTransactions();
+    closeModal('modal-tx'); toast('Transaction updated'); loadTransactions(); renderProductionChart();
   } else {
     // Multi-line new transaction
     const lines = [];
@@ -1666,7 +1666,7 @@ async function saveTransaction() {
     }
     closeModal('modal-tx');
     toast(`${lines.length} item(s) recorded`);
-    loadTransactions();
+    loadTransactions(); renderProductionChart();
   }
 }
 
