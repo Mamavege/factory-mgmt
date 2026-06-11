@@ -1412,7 +1412,7 @@ async function saveReserve() {
 async function loadTransactions() {
   const { data } = await sb.from('stock_transactions').select('*, item:inventory!item_id(item_name,item_code,unit), creator:profiles!created_by(name)').order('created_at',{ascending:false}).limit(500);
   allTransactions = data || [];
-  renderTransactions(allTransactions);
+  filterTransactions();
 }
 function getFilteredTransactions() {
   const q = document.getElementById('tx-search').value.toLowerCase();
@@ -1607,7 +1607,8 @@ async function deleteTx(id) {
       await sb.from('inventory').update({quantity:Math.max(0,reversed),updated_at:new Date().toISOString()}).eq('id',itemId);
     }
   }
-  await sb.from('stock_transactions').update({deleted_at: new Date().toISOString()}).eq('id',id);
+  const { error: delErr } = await sb.from('stock_transactions').update({deleted_at: new Date().toISOString()}).eq('id',id);
+  if (delErr) return toast('Delete failed: '+delErr.message, 'error');
   toast('Transaction deleted'); loadTransactions(); renderProductionChart();
 }
 async function saveTransaction() {
