@@ -967,6 +967,8 @@ async function handleLogin() {
   const btn = document.getElementById('btn-login');
   btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i> Signing in…';
   appInitialized = false;
+  // Clear only Supabase auth keys to prevent stale token from blocking signin
+  Object.keys(localStorage).filter(k => k.startsWith('sb-')).forEach(k => localStorage.removeItem(k));
   try {
     const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
     if (error) {
