@@ -552,7 +552,7 @@
         <div class="card">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Item Code</th><th>Name</th><th>Category</th><th>Stock</th><th>Unit</th><th>Min. Stock</th><th>Location</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Item Code</th><th>Name</th><th>Category</th><th>Stock (Units)</th><th>Cartons</th><th>Unit</th><th>Ctn Size</th><th>Min. Stock</th><th>Location</th><th>Actions</th></tr></thead>
               <tbody id="inv-tbody"></tbody>
             </table>
           </div>
@@ -767,17 +767,23 @@
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label>Current Stock</label>
+        <label>Current Stock (Units)</label>
         <input type="number" id="inv-qty" placeholder="0">
       </div>
       <div class="form-group">
-        <label>Min. Stock</label>
-        <input type="number" id="inv-min" placeholder="0">
+        <label>Carton Size (units/ctn)</label>
+        <input type="number" id="inv-carton-size" placeholder="e.g. 18">
       </div>
     </div>
-    <div class="form-group">
-      <label>Location</label>
-      <input type="text" id="inv-location" placeholder="Zone A - Rack 1">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Min. Stock (Units)</label>
+        <input type="number" id="inv-min" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>Location</label>
+        <input type="text" id="inv-location" placeholder="Zone A - Rack 1">
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-inv')">Cancel</button>
@@ -799,7 +805,12 @@
     </div>
     <div class="form-group">
       <label>Item</label>
-      <select id="tx-item" onchange="onTxItemChange()"></select>
+      <div style="position:relative">
+        <input type="text" id="tx-item-search" placeholder="Type to search item name or code…" autocomplete="off"
+          oninput="filterTxItems()" onfocus="showTxDropdown()" style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;outline:none;font-family:inherit">
+        <input type="hidden" id="tx-item">
+        <div id="tx-item-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:white;border:1.5px solid var(--border);border-radius:10px;max-height:200px;overflow-y:auto;z-index:300;box-shadow:var(--shadow-lg);margin-top:4px"></div>
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -1238,9 +1249,10 @@ function renderInventory(data) {
   document.getElementById('inv-tbody').innerHTML = data.length ? data.map(i=>`<tr>
     <td><strong>${i.item_code}</strong></td><td>${i.item_name}</td><td>${i.category||'—'}</td>
     <td><span class="${i.quantity<=i.min_stock?'badge badge-danger':'badge badge-success'}">${i.quantity}</span></td>
-    <td>${i.unit}</td><td>${i.min_stock}</td><td>${i.location||'—'}</td>
+    <td>${i.carton_size?Math.floor(i.quantity/(i.carton_size||1)):'—'}</td>
+    <td>${i.unit}</td><td>${i.carton_size||'—'}</td><td>${i.min_stock}</td><td>${i.location||'—'}</td>
     <td>${isAdmin?`<button class="btn btn-secondary btn-sm" onclick="editInv('${i.id}')"><i class="ti ti-edit"></i></button> <button class="btn btn-danger btn-sm" onclick="deleteInv('${i.id}')"><i class="ti ti-trash"></i></button>`:'—'}</td>
-  </tr>`).join('') : '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-box"></i><p>No inventory items</p></div></td></tr>';
+  </tr>`).join('') : '<tr><td colspan="10"><div class="empty-state"><i class="ti ti-box"></i><p>No inventory items</p></div></td></tr>';
 }
 function openInvModal(data=null) {
   document.getElementById('modal-inv-title').textContent = data?'Edit Item':'New Item';
@@ -1250,6 +1262,7 @@ function openInvModal(data=null) {
   document.getElementById('inv-category').value = data?.category||'';
   document.getElementById('inv-unit').value = data?.unit||'pcs';
   document.getElementById('inv-qty').value = data?.quantity||'0';
+  document.getElementById('inv-carton-size').value = data?.carton_size||'';
   document.getElementById('inv-min').value = data?.min_stock||'0';
   document.getElementById('inv-location').value = data?.location||'';
   openModal('modal-inv');
@@ -1257,7 +1270,7 @@ function openInvModal(data=null) {
 async function editInv(id) { openInvModal(allInventory.find(x=>x.id===id)); }
 async function saveInventory() {
   const id = document.getElementById('inv-id').value;
-  const payload = { item_code:document.getElementById('inv-code').value, item_name:document.getElementById('inv-name').value, category:document.getElementById('inv-category').value, unit:document.getElementById('inv-unit').value, quantity:parseInt(document.getElementById('inv-qty').value)||0, min_stock:parseInt(document.getElementById('inv-min').value)||0, location:document.getElementById('inv-location').value, updated_at:new Date().toISOString() };
+  const payload = { item_code:document.getElementById('inv-code').value, item_name:document.getElementById('inv-name').value, category:document.getElementById('inv-category').value, unit:document.getElementById('inv-unit').value, quantity:parseInt(document.getElementById('inv-qty').value)||0, carton_size:parseInt(document.getElementById('inv-carton-size').value)||null, min_stock:parseInt(document.getElementById('inv-min').value)||0, location:document.getElementById('inv-location').value, updated_at:new Date().toISOString() };
   const { error } = id ? await sb.from('inventory').update(payload).eq('id',id) : await sb.from('inventory').insert(payload);
   if (error) return toast('Save failed: '+error.message,'error');
   closeModal('modal-inv'); toast('Item saved'); loadInventory();
@@ -1332,25 +1345,60 @@ let txItemsCache = [];
 async function openTxModal() {
   const { data } = await sb.from('inventory').select('id,item_code,item_name,unit,quantity').order('item_name');
   txItemsCache = data || [];
-  document.getElementById('tx-item').innerHTML = data.map(i=>`<option value="${i.id}">${i.item_code} — ${i.item_name}</option>`).join('');
   document.getElementById('tx-type').value='in'; document.getElementById('tx-qty').value='';
   document.getElementById('tx-ref').value=''; document.getElementById('tx-reason').value='';
-  onTxItemChange();
+  document.getElementById('tx-item').value='';
+  document.getElementById('tx-item-search').value='';
+  document.getElementById('tx-uom').textContent='';
+  document.getElementById('tx-item-dropdown').style.display='none';
   openModal('modal-tx');
 }
-function onTxItemChange() {
-  const itemId = document.getElementById('tx-item').value;
-  const item = txItemsCache.find(i => i.id === itemId);
-  const uomEl = document.getElementById('tx-uom');
-  if (item?.unit) {
-    uomEl.textContent = item.unit;
-  } else {
-    uomEl.textContent = '';
-  }
+function filterTxItems() {
+  const q = document.getElementById('tx-item-search').value.toLowerCase();
+  const filtered = q ? txItemsCache.filter(i => i.item_name.toLowerCase().includes(q) || i.item_code.toLowerCase().includes(q)) : txItemsCache;
+  renderTxDropdown(filtered);
+  showTxDropdown();
 }
+function showTxDropdown() {
+  const q = document.getElementById('tx-item-search').value.toLowerCase();
+  const filtered = q ? txItemsCache.filter(i => i.item_name.toLowerCase().includes(q) || i.item_code.toLowerCase().includes(q)) : txItemsCache;
+  renderTxDropdown(filtered);
+  document.getElementById('tx-item-dropdown').style.display = 'block';
+}
+function renderTxDropdown(items) {
+  const dd = document.getElementById('tx-item-dropdown');
+  if (!items.length) {
+    dd.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text-muted)">No items found</div>';
+    return;
+  }
+  dd.innerHTML = items.map(i => `
+    <div onclick="selectTxItem('${i.id}')" style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);transition:background 0.1s"
+      onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='white'">
+      <strong>${i.item_name}</strong>
+      <span style="color:var(--text-muted);margin-left:8px;font-size:12px">${i.item_code}</span>
+      <span style="float:right;color:var(--text-muted);font-size:12px">${i.quantity} ${i.unit}</span>
+    </div>`).join('');
+}
+function selectTxItem(id) {
+  const item = txItemsCache.find(i => i.id === id);
+  if (!item) return;
+  document.getElementById('tx-item').value = item.id;
+  document.getElementById('tx-item-search').value = `${item.item_name}  (${item.item_code})`;
+  document.getElementById('tx-item-dropdown').style.display = 'none';
+  document.getElementById('tx-uom').textContent = item.unit || '';
+}
+function onTxItemChange() {}
+// Close dropdown when clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('#tx-item-search') && !e.target.closest('#tx-item-dropdown')) {
+    const dd = document.getElementById('tx-item-dropdown');
+    if (dd) dd.style.display = 'none';
+  }
+});
 async function saveTransaction() {
   const type=document.getElementById('tx-type').value, itemId=document.getElementById('tx-item').value;
   const qty=parseInt(document.getElementById('tx-qty').value)||0;
+  if (!itemId) return toast('Please select an item','error');
   if (!qty) return toast('Please enter a quantity','error');
   const { data: item } = await sb.from('inventory').select('quantity').eq('id',itemId).single();
   const newQty = type==='in' ? item.quantity+qty : item.quantity-qty;
