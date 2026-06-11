@@ -799,7 +799,12 @@
     </div>
     <div class="form-group">
       <label>Item</label>
-      <select id="tx-item" onchange="onTxItemChange()"></select>
+      <div style="position:relative">
+        <input type="text" id="tx-item-search" placeholder="Type to search item name or code…" autocomplete="off"
+          oninput="filterTxItems()" onfocus="showTxDropdown()" style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;outline:none;font-family:inherit">
+        <input type="hidden" id="tx-item">
+        <div id="tx-item-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:white;border:1.5px solid var(--border);border-radius:10px;max-height:200px;overflow-y:auto;z-index:300;box-shadow:var(--shadow-lg);margin-top:4px"></div>
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -1332,25 +1337,60 @@ let txItemsCache = [];
 async function openTxModal() {
   const { data } = await sb.from('inventory').select('id,item_code,item_name,unit,quantity').order('item_name');
   txItemsCache = data || [];
-  document.getElementById('tx-item').innerHTML = data.map(i=>`<option value="${i.id}">${i.item_code} — ${i.item_name}</option>`).join('');
   document.getElementById('tx-type').value='in'; document.getElementById('tx-qty').value='';
   document.getElementById('tx-ref').value=''; document.getElementById('tx-reason').value='';
-  onTxItemChange();
+  document.getElementById('tx-item').value='';
+  document.getElementById('tx-item-search').value='';
+  document.getElementById('tx-uom').textContent='';
+  document.getElementById('tx-item-dropdown').style.display='none';
   openModal('modal-tx');
 }
-function onTxItemChange() {
-  const itemId = document.getElementById('tx-item').value;
-  const item = txItemsCache.find(i => i.id === itemId);
-  const uomEl = document.getElementById('tx-uom');
-  if (item?.unit) {
-    uomEl.textContent = item.unit;
-  } else {
-    uomEl.textContent = '';
-  }
+function filterTxItems() {
+  const q = document.getElementById('tx-item-search').value.toLowerCase();
+  const filtered = q ? txItemsCache.filter(i => i.item_name.toLowerCase().includes(q) || i.item_code.toLowerCase().includes(q)) : txItemsCache;
+  renderTxDropdown(filtered);
+  showTxDropdown();
 }
+function showTxDropdown() {
+  const q = document.getElementById('tx-item-search').value.toLowerCase();
+  const filtered = q ? txItemsCache.filter(i => i.item_name.toLowerCase().includes(q) || i.item_code.toLowerCase().includes(q)) : txItemsCache;
+  renderTxDropdown(filtered);
+  document.getElementById('tx-item-dropdown').style.display = 'block';
+}
+function renderTxDropdown(items) {
+  const dd = document.getElementById('tx-item-dropdown');
+  if (!items.length) {
+    dd.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text-muted)">No items found</div>';
+    return;
+  }
+  dd.innerHTML = items.map(i => `
+    <div onclick="selectTxItem('${i.id}')" style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);transition:background 0.1s"
+      onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='white'">
+      <strong>${i.item_name}</strong>
+      <span style="color:var(--text-muted);margin-left:8px;font-size:12px">${i.item_code}</span>
+      <span style="float:right;color:var(--text-muted);font-size:12px">${i.quantity} ${i.unit}</span>
+    </div>`).join('');
+}
+function selectTxItem(id) {
+  const item = txItemsCache.find(i => i.id === id);
+  if (!item) return;
+  document.getElementById('tx-item').value = item.id;
+  document.getElementById('tx-item-search').value = `${item.item_name}  (${item.item_code})`;
+  document.getElementById('tx-item-dropdown').style.display = 'none';
+  document.getElementById('tx-uom').textContent = item.unit || '';
+}
+function onTxItemChange() {}
+// Close dropdown when clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('#tx-item-search') && !e.target.closest('#tx-item-dropdown')) {
+    const dd = document.getElementById('tx-item-dropdown');
+    if (dd) dd.style.display = 'none';
+  }
+});
 async function saveTransaction() {
   const type=document.getElementById('tx-type').value, itemId=document.getElementById('tx-item').value;
   const qty=parseInt(document.getElementById('tx-qty').value)||0;
+  if (!itemId) return toast('Please select an item','error');
   if (!qty) return toast('Please enter a quantity','error');
   const { data: item } = await sb.from('inventory').select('quantity').eq('id',itemId).single();
   const newQty = type==='in' ? item.quantity+qty : item.quantity-qty;
