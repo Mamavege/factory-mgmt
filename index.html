@@ -551,7 +551,7 @@
         <div class="card">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Item Code</th><th>Name</th><th>Category</th><th>Stock (Units)</th><th>Cartons</th><th>Unit</th><th>Ctn Size</th><th>Min. Stock</th><th>Location</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Item Code</th><th>Name</th><th>Category</th><th>Total (Units)</th><th>Reserved</th><th>Available</th><th>Cartons</th><th>Unit</th><th>Ctn Size</th><th>Min. Stock</th><th>Location</th><th>Reserve Location</th><th>Actions</th></tr></thead>
               <tbody id="inv-tbody"></tbody>
             </table>
           </div>
@@ -790,6 +790,33 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-inv')">Cancel</button>
       <button class="btn btn-primary" style="width:auto" onclick="saveInventory()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-reserve">
+  <div class="modal">
+    <h2>Set Reserved Stock</h2>
+    <input type="hidden" id="reserve-inv-id">
+    <p id="reserve-item-name" style="color:var(--text-muted);margin-bottom:16px;font-size:13px"></p>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Total Stock</label>
+        <input type="number" id="reserve-total" disabled style="opacity:0.6">
+      </div>
+      <div class="form-group">
+        <label>Reserved Qty (Units)</label>
+        <input type="number" id="reserve-qty" placeholder="0" min="0">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Reserve Location</label>
+      <input type="text" id="reserve-location" placeholder="e.g. Reserved Zone B">
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin-top:4px">Reserved stock stays in warehouse total but is set aside. Available = Total − Reserved.</p>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-reserve')">Cancel</button>
+      <button class="btn btn-primary" style="width:auto;background:var(--warning)" onclick="saveReserve()"><i class="ti ti-lock"></i> Save Reserve</button>
     </div>
   </div>
 </div>
@@ -1245,13 +1272,24 @@ function filterInventory() {
 }
 function renderInventory(data) {
   const isAdmin = currentProfile?.role==='admin';
-  document.getElementById('inv-tbody').innerHTML = data.length ? data.map(i=>`<tr>
+  document.getElementById('inv-tbody').innerHTML = data.length ? data.map(i=>{
+    const reserved = i.reserved_qty||0;
+    const available = i.quantity - reserved;
+    const cartons = i.carton_size ? Math.floor(i.quantity/i.carton_size) : '—';
+    return `<tr>
     <td><strong>${i.item_code}</strong></td><td>${i.item_name}</td><td>${i.category||'—'}</td>
     <td><span class="${i.quantity<=i.min_stock?'badge badge-danger':'badge badge-success'}">${i.quantity}</span></td>
-    <td>${i.carton_size?Math.floor(i.quantity/(i.carton_size||1)):'—'}</td>
+    <td>${reserved>0?`<span class="badge badge-warning">${reserved}</span>`:'—'}</td>
+    <td><span class="${available<=0?'badge badge-danger':'badge badge-success'}">${available}</span></td>
+    <td>${cartons}</td>
     <td>${i.unit}</td><td>${i.carton_size||'—'}</td><td>${i.min_stock}</td><td>${i.location||'—'}</td>
-    <td>${isAdmin?`<button class="btn btn-secondary btn-sm" onclick="editInv('${i.id}')"><i class="ti ti-edit"></i></button> <button class="btn btn-danger btn-sm" onclick="deleteInv('${i.id}')"><i class="ti ti-trash"></i></button>`:'—'}</td>
-  </tr>`).join('') : '<tr><td colspan="10"><div class="empty-state"><i class="ti ti-box"></i><p>No inventory items</p></div></td></tr>';
+    <td>${i.reserved_location||'—'}</td>
+    <td>
+      ${isAdmin?`<button class="btn btn-secondary btn-sm" onclick="editInv('${i.id}')"><i class="ti ti-edit"></i></button>
+      <button class="btn btn-sm" style="background:var(--warning);color:#fff" onclick="openReserveModal('${i.id}')"><i class="ti ti-lock"></i></button>
+      <button class="btn btn-danger btn-sm" onclick="deleteInv('${i.id}')"><i class="ti ti-trash"></i></button>`:'—'}
+    </td>
+  </tr>`;}).join('') : '<tr><td colspan="13"><div class="empty-state"><i class="ti ti-box"></i><p>No inventory items</p></div></td></tr>';
 }
 function openInvModal(data=null) {
   document.getElementById('modal-inv-title').textContent = data?'Edit Item':'New Item';
@@ -1277,6 +1315,26 @@ async function saveInventory() {
 async function deleteInv(id) {
   if (!confirm('Delete this item?')) return;
   await sb.from('inventory').delete().eq('id',id); toast('Deleted'); loadInventory();
+}
+function openReserveModal(id) {
+  const item = allInventory.find(x=>x.id===id);
+  if (!item) return;
+  document.getElementById('reserve-inv-id').value = id;
+  document.getElementById('reserve-item-name').textContent = `${item.item_code} — ${item.item_name}`;
+  document.getElementById('reserve-total').value = item.quantity;
+  document.getElementById('reserve-qty').value = item.reserved_qty||0;
+  document.getElementById('reserve-location').value = item.reserved_location||'';
+  openModal('modal-reserve');
+}
+async function saveReserve() {
+  const id = document.getElementById('reserve-inv-id').value;
+  const total = parseInt(document.getElementById('reserve-total').value)||0;
+  const qty = parseInt(document.getElementById('reserve-qty').value)||0;
+  if (qty > total) return toast('Reserved qty cannot exceed total stock','error');
+  const location = document.getElementById('reserve-location').value.trim();
+  const { error } = await sb.from('inventory').update({ reserved_qty: qty, reserved_location: location||null }).eq('id',id);
+  if (error) return toast('Save failed: '+error.message,'error');
+  closeModal('modal-reserve'); toast('Reserve updated'); loadInventory();
 }
 
 // ─── TRANSACTIONS ────────────────────────────────────
