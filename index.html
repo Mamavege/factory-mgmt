@@ -934,7 +934,14 @@
 const SUPABASE_URL = 'https://ezzsrkwedadiqaghrvku.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6enNya3dlZGFkaXFhZ2hydmt1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMzI1NjYsImV4cCI6MjA5NjYwODU2Nn0.9Xm-HWk9Ggyd4bBYusp9tUUHgpIE-h-iMjbEvbPS0oU';
 const { createClient } = supabase;
-const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
+    storageKey: 'factoryos-auth'
+  }
+});
 
 let currentUser = null;
 let currentProfile = null;
@@ -967,8 +974,8 @@ async function handleLogin() {
   const btn = document.getElementById('btn-login');
   btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i> Signing in…';
   appInitialized = false;
-  // Clear only Supabase auth keys to prevent stale token from blocking signin
-  Object.keys(localStorage).filter(k => k.startsWith('sb-')).forEach(k => localStorage.removeItem(k));
+  // Clear stale auth token
+  localStorage.removeItem('factoryos-auth');
   try {
     const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
     if (error) {
