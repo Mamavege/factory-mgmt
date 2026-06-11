@@ -552,7 +552,7 @@
         <div class="card">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Item Code</th><th>Name</th><th>Category</th><th>Stock</th><th>Unit</th><th>Min. Stock</th><th>Location</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Item Code</th><th>Name</th><th>Category</th><th>Stock (Units)</th><th>Cartons</th><th>Unit</th><th>Ctn Size</th><th>Min. Stock</th><th>Location</th><th>Actions</th></tr></thead>
               <tbody id="inv-tbody"></tbody>
             </table>
           </div>
@@ -767,17 +767,23 @@
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label>Current Stock</label>
+        <label>Current Stock (Units)</label>
         <input type="number" id="inv-qty" placeholder="0">
       </div>
       <div class="form-group">
-        <label>Min. Stock</label>
-        <input type="number" id="inv-min" placeholder="0">
+        <label>Carton Size (units/ctn)</label>
+        <input type="number" id="inv-carton-size" placeholder="e.g. 18">
       </div>
     </div>
-    <div class="form-group">
-      <label>Location</label>
-      <input type="text" id="inv-location" placeholder="Zone A - Rack 1">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Min. Stock (Units)</label>
+        <input type="number" id="inv-min" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>Location</label>
+        <input type="text" id="inv-location" placeholder="Zone A - Rack 1">
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-inv')">Cancel</button>
@@ -1243,9 +1249,10 @@ function renderInventory(data) {
   document.getElementById('inv-tbody').innerHTML = data.length ? data.map(i=>`<tr>
     <td><strong>${i.item_code}</strong></td><td>${i.item_name}</td><td>${i.category||'—'}</td>
     <td><span class="${i.quantity<=i.min_stock?'badge badge-danger':'badge badge-success'}">${i.quantity}</span></td>
-    <td>${i.unit}</td><td>${i.min_stock}</td><td>${i.location||'—'}</td>
+    <td>${i.carton_size?Math.floor(i.quantity/(i.carton_size||1)):'—'}</td>
+    <td>${i.unit}</td><td>${i.carton_size||'—'}</td><td>${i.min_stock}</td><td>${i.location||'—'}</td>
     <td>${isAdmin?`<button class="btn btn-secondary btn-sm" onclick="editInv('${i.id}')"><i class="ti ti-edit"></i></button> <button class="btn btn-danger btn-sm" onclick="deleteInv('${i.id}')"><i class="ti ti-trash"></i></button>`:'—'}</td>
-  </tr>`).join('') : '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-box"></i><p>No inventory items</p></div></td></tr>';
+  </tr>`).join('') : '<tr><td colspan="10"><div class="empty-state"><i class="ti ti-box"></i><p>No inventory items</p></div></td></tr>';
 }
 function openInvModal(data=null) {
   document.getElementById('modal-inv-title').textContent = data?'Edit Item':'New Item';
@@ -1255,6 +1262,7 @@ function openInvModal(data=null) {
   document.getElementById('inv-category').value = data?.category||'';
   document.getElementById('inv-unit').value = data?.unit||'pcs';
   document.getElementById('inv-qty').value = data?.quantity||'0';
+  document.getElementById('inv-carton-size').value = data?.carton_size||'';
   document.getElementById('inv-min').value = data?.min_stock||'0';
   document.getElementById('inv-location').value = data?.location||'';
   openModal('modal-inv');
@@ -1262,7 +1270,7 @@ function openInvModal(data=null) {
 async function editInv(id) { openInvModal(allInventory.find(x=>x.id===id)); }
 async function saveInventory() {
   const id = document.getElementById('inv-id').value;
-  const payload = { item_code:document.getElementById('inv-code').value, item_name:document.getElementById('inv-name').value, category:document.getElementById('inv-category').value, unit:document.getElementById('inv-unit').value, quantity:parseInt(document.getElementById('inv-qty').value)||0, min_stock:parseInt(document.getElementById('inv-min').value)||0, location:document.getElementById('inv-location').value, updated_at:new Date().toISOString() };
+  const payload = { item_code:document.getElementById('inv-code').value, item_name:document.getElementById('inv-name').value, category:document.getElementById('inv-category').value, unit:document.getElementById('inv-unit').value, quantity:parseInt(document.getElementById('inv-qty').value)||0, carton_size:parseInt(document.getElementById('inv-carton-size').value)||null, min_stock:parseInt(document.getElementById('inv-min').value)||0, location:document.getElementById('inv-location').value, updated_at:new Date().toISOString() };
   const { error } = id ? await sb.from('inventory').update(payload).eq('id',id) : await sb.from('inventory').insert(payload);
   if (error) return toast('Save failed: '+error.message,'error');
   closeModal('modal-inv'); toast('Item saved'); loadInventory();
