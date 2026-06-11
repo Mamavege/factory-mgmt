@@ -577,7 +577,7 @@
         <div class="card">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Time</th><th>Type</th><th>Item</th><th>Item Code</th><th>Qty</th><th>UOM</th><th>Reason</th><th>Reference</th><th>By</th></tr></thead>
+              <thead><tr><th>Time</th><th>Type</th><th>Item</th><th>Item Code</th><th>Qty</th><th>UOM</th><th>Reason</th><th>Reference</th><th>By</th><th>Actions</th></tr></thead>
               <tbody id="tx-tbody"></tbody>
             </table>
           </div>
@@ -824,7 +824,11 @@
 <!-- Transaction Modal -->
 <div class="modal-overlay" id="modal-tx">
   <div class="modal">
-    <h2>Stock Transaction</h2>
+    <h2 id="modal-tx-title">Stock Transaction</h2>
+    <input type="hidden" id="tx-id">
+    <input type="hidden" id="tx-old-item-id">
+    <input type="hidden" id="tx-old-qty">
+    <input type="hidden" id="tx-old-type">
     <div class="form-group">
       <label>Type</label>
       <select id="tx-type">
@@ -860,7 +864,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-tx')">Cancel</button>
-      <button class="btn btn-primary" style="width:auto" onclick="saveTransaction()">Confirm</button>
+      <button class="btn btn-primary" style="width:auto" id="btn-tx-save" onclick="saveTransaction()">Confirm</button>
     </div>
   </div>
 </div>
@@ -1361,6 +1365,7 @@ function getFilteredTransactions() {
 }
 function filterTransactions() { renderTransactions(getFilteredTransactions()); }
 function renderTransactions(data) {
+  const isAdmin = currentProfile?.role==='admin';
   document.getElementById('tx-tbody').innerHTML = data.length ? data.map(x=>`<tr>
     <td>${fmtDate(x.created_at)}</td>
     <td><span class="badge ${x.type==='in'?'badge-success':'badge-warning'}">${x.type==='in'?'Stock In':'Stock Out'}</span></td>
@@ -1369,7 +1374,8 @@ function renderTransactions(data) {
     <td><strong>${x.quantity}</strong></td>
     <td>${x.item_unit||x.item?.unit||'—'}</td>
     <td>${x.reason||'—'}</td><td>${x.reference_no||'—'}</td><td>${x.creator?.name||'—'}</td>
-  </tr>`).join('') : '<tr><td colspan="9"><div class="empty-state"><i class="ti ti-arrows-exchange"></i><p>No transactions found</p></div></td></tr>';
+    <td>${isAdmin?`<button class="btn btn-secondary btn-sm" onclick="editTx('${x.id}')"><i class="ti ti-edit"></i></button> <button class="btn btn-danger btn-sm" onclick="deleteTx('${x.id}')"><i class="ti ti-trash"></i></button>`:'—'}</td>
+  </tr>`).join('') : '<tr><td colspan="10"><div class="empty-state"><i class="ti ti-arrows-exchange"></i><p>No transactions found</p></div></td></tr>';
 }
 function exportTransactionsCSV() {
   const data = getFilteredTransactions();
@@ -1405,6 +1411,12 @@ let txItemsCache = [];
 async function openTxModal() {
   const { data } = await sb.from('inventory').select('id,item_code,item_name,unit,quantity').order('item_name');
   txItemsCache = data || [];
+  document.getElementById('modal-tx-title').textContent = 'New Transaction';
+  document.getElementById('btn-tx-save').textContent = 'Confirm';
+  document.getElementById('tx-id').value='';
+  document.getElementById('tx-old-item-id').value='';
+  document.getElementById('tx-old-qty').value='';
+  document.getElementById('tx-old-type').value='';
   document.getElementById('tx-type').value='in'; document.getElementById('tx-qty').value='';
   document.getElementById('tx-ref').value=''; document.getElementById('tx-reason').value='';
   document.getElementById('tx-item').value='';
@@ -1412,6 +1424,44 @@ async function openTxModal() {
   document.getElementById('tx-uom').textContent='';
   document.getElementById('tx-item-dropdown').style.display='none';
   openModal('modal-tx');
+}
+async function editTx(id) {
+  const tx = allTransactions.find(x=>x.id===id);
+  if (!tx) return;
+  const { data } = await sb.from('inventory').select('id,item_code,item_name,unit,quantity').order('item_name');
+  txItemsCache = data || [];
+  document.getElementById('modal-tx-title').textContent = 'Edit Transaction';
+  document.getElementById('btn-tx-save').textContent = 'Save Changes';
+  document.getElementById('tx-id').value = tx.id;
+  document.getElementById('tx-old-item-id').value = tx.inventory_id||tx.item_id||'';
+  document.getElementById('tx-old-qty').value = tx.quantity;
+  document.getElementById('tx-old-type').value = tx.type;
+  document.getElementById('tx-type').value = tx.type;
+  document.getElementById('tx-qty').value = tx.quantity;
+  document.getElementById('tx-ref').value = tx.reference_no||'';
+  document.getElementById('tx-reason').value = tx.reason||'';
+  const itemId = tx.inventory_id||tx.item_id||'';
+  document.getElementById('tx-item').value = itemId;
+  const item = txItemsCache.find(i=>i.id===itemId);
+  document.getElementById('tx-item-search').value = item ? `${item.item_name}  (${item.item_code})` : '';
+  document.getElementById('tx-uom').textContent = tx.item_unit||item?.unit||'';
+  document.getElementById('tx-item-dropdown').style.display='none';
+  openModal('modal-tx');
+}
+async function deleteTx(id) {
+  if (!confirm('Delete this transaction? The inventory quantity will be reversed.')) return;
+  const tx = allTransactions.find(x=>x.id===id);
+  if (!tx) return;
+  const itemId = tx.inventory_id||tx.item_id||'';
+  if (itemId) {
+    const { data: item } = await sb.from('inventory').select('quantity').eq('id',itemId).single();
+    if (item) {
+      const reversed = tx.type==='in' ? item.quantity - tx.quantity : item.quantity + tx.quantity;
+      await sb.from('inventory').update({quantity:Math.max(0,reversed),updated_at:new Date().toISOString()}).eq('id',itemId);
+    }
+  }
+  await sb.from('stock_transactions').delete().eq('id',id);
+  toast('Transaction deleted'); loadTransactions();
 }
 function filterTxItems() {
   const q = document.getElementById('tx-item-search').value.toLowerCase();
@@ -1456,17 +1506,44 @@ document.addEventListener('click', e => {
   }
 });
 async function saveTransaction() {
-  const type=document.getElementById('tx-type').value, itemId=document.getElementById('tx-item').value;
-  const qty=parseInt(document.getElementById('tx-qty').value)||0;
+  const txId = document.getElementById('tx-id').value;
+  const type = document.getElementById('tx-type').value;
+  const itemId = document.getElementById('tx-item').value;
+  const qty = parseInt(document.getElementById('tx-qty').value)||0;
   if (!itemId) return toast('Please select an item','error');
   if (!qty) return toast('Please enter a quantity','error');
-  const { data: item } = await sb.from('inventory').select('quantity').eq('id',itemId).single();
-  const newQty = type==='in' ? item.quantity+qty : item.quantity-qty;
-  if (newQty<0) return toast('Insufficient stock for this transaction!','error');
-  const { error } = await sb.from('stock_transactions').insert({ item_id:itemId, type, quantity:qty, reference_no:document.getElementById('tx-ref').value, reason:document.getElementById('tx-reason').value, created_by:currentUser.id });
-  if (error) return toast('Save failed: '+error.message,'error');
-  await sb.from('inventory').update({quantity:newQty, updated_at:new Date().toISOString()}).eq('id',itemId);
-  closeModal('modal-tx'); toast(type==='in'?'Stock in recorded':'Stock out recorded'); loadTransactions();
+  const payload = { type, quantity:qty, reference_no:document.getElementById('tx-ref').value, reason:document.getElementById('tx-reason').value };
+  if (txId) {
+    // Edit: reverse old qty on old item, apply new qty on (possibly new) item
+    const oldItemId = document.getElementById('tx-old-item-id').value;
+    const oldQty = parseInt(document.getElementById('tx-old-qty').value)||0;
+    const oldType = document.getElementById('tx-old-type').value;
+    // Reverse old effect
+    if (oldItemId) {
+      const { data: oldItem } = await sb.from('inventory').select('quantity').eq('id',oldItemId).single();
+      if (oldItem) {
+        const reversed = oldType==='in' ? oldItem.quantity - oldQty : oldItem.quantity + oldQty;
+        await sb.from('inventory').update({quantity:Math.max(0,reversed),updated_at:new Date().toISOString()}).eq('id',oldItemId);
+      }
+    }
+    // Apply new effect
+    const { data: item } = await sb.from('inventory').select('quantity').eq('id',itemId).single();
+    const newQty = type==='in' ? item.quantity+qty : item.quantity-qty;
+    if (newQty<0) return toast('Insufficient stock for this transaction!','error');
+    const { error } = await sb.from('stock_transactions').update({...payload, item_id:itemId}).eq('id',txId);
+    if (error) return toast('Save failed: '+error.message,'error');
+    await sb.from('inventory').update({quantity:newQty,updated_at:new Date().toISOString()}).eq('id',itemId);
+    closeModal('modal-tx'); toast('Transaction updated'); loadTransactions();
+  } else {
+    // New transaction
+    const { data: item } = await sb.from('inventory').select('quantity').eq('id',itemId).single();
+    const newQty = type==='in' ? item.quantity+qty : item.quantity-qty;
+    if (newQty<0) return toast('Insufficient stock for this transaction!','error');
+    const { error } = await sb.from('stock_transactions').insert({ item_id:itemId, ...payload, created_by:currentUser.id });
+    if (error) return toast('Save failed: '+error.message,'error');
+    await sb.from('inventory').update({quantity:newQty,updated_at:new Date().toISOString()}).eq('id',itemId);
+    closeModal('modal-tx'); toast(type==='in'?'Stock in recorded':'Stock out recorded'); loadTransactions();
+  }
 }
 
 // ─── EQUIPMENT ──────────────────────────────────────
