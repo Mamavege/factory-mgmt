@@ -1641,7 +1641,11 @@ async function deleteTx(id) {
   if (!confirm('Delete this transaction? The inventory quantity will be reversed.')) return;
   const tx = allTransactions.find(x=>x.id===id);
   if (!tx) return;
-  const itemId = tx.inventory_id||tx.item_id||'';
+  // Soft delete first — if this fails (e.g. RLS), abort before touching inventory
+  const { error: delErr } = await sb.from('stock_transactions').update({deleted_at: new Date().toISOString()}).eq('id',id);
+  if (delErr) return toast('Delete failed: '+delErr.message+' — check Supabase RLS on stock_transactions', 'error');
+  // Revert inventory only after successful soft delete
+  const itemId = tx.item_id||'';
   if (itemId) {
     const { data: item } = await sb.from('inventory').select('quantity').eq('id',itemId).single();
     if (item) {
@@ -1649,9 +1653,7 @@ async function deleteTx(id) {
       await sb.from('inventory').update({quantity:Math.max(0,reversed),updated_at:new Date().toISOString()}).eq('id',itemId);
     }
   }
-  const { error: delErr } = await sb.from('stock_transactions').update({deleted_at: new Date().toISOString()}).eq('id',id);
-  if (delErr) return toast('Delete failed: '+delErr.message, 'error');
-  toast('Transaction deleted'); loadTransactions(); renderProductionChart();
+  toast('Transaction deleted — inventory quantity reversed'); loadTransactions(); renderProductionChart();
 }
 async function saveTransaction() {
   const txId = document.getElementById('tx-id').value;
