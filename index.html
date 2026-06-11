@@ -219,6 +219,13 @@
   @keyframes modalIn { from { opacity:0; transform:scale(0.95) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
   .modal h2 { font-size: 18px; font-weight: 800; margin-bottom: 22px; letter-spacing: -0.3px; }
   .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 22px; }
+  .tx-line { display:flex; gap:8px; align-items:flex-start; margin-bottom:8px; background:var(--bg); border-radius:10px; padding:10px; border:1px solid var(--border); }
+  .tx-line-item { flex:3; position:relative; }
+  .tx-line-qty { flex:1; min-width:70px; }
+  .tx-line-uom { min-width:36px; font-size:12px; font-weight:700; color:var(--accent); padding-top:10px; text-align:center; }
+  .tx-line input { width:100%; padding:8px 10px; border:1.5px solid var(--border); border-radius:8px; font-size:13px; font-family:inherit; outline:none; }
+  .tx-line input:focus { border-color:var(--accent); }
+  .tx-line-dd { display:none; position:absolute; top:100%; left:0; right:0; background:white; border:1.5px solid var(--border); border-radius:10px; max-height:180px; overflow-y:auto; z-index:400; box-shadow:var(--shadow-lg); margin-top:3px; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 
   /* ── TOAST ────────────────────────────── */
@@ -829,39 +836,26 @@
     <input type="hidden" id="tx-old-item-id">
     <input type="hidden" id="tx-old-qty">
     <input type="hidden" id="tx-old-type">
-    <div class="form-group">
-      <label>Type</label>
-      <select id="tx-type">
-        <option value="in">Stock In</option>
-        <option value="out">Stock Out</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>Item</label>
-      <div style="position:relative">
-        <input type="text" id="tx-item-search" placeholder="Type to search item name or code…" autocomplete="off"
-          oninput="filterTxItems()" onfocus="showTxDropdown()" style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;outline:none;font-family:inherit">
-        <input type="hidden" id="tx-item">
-        <div id="tx-item-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:white;border:1.5px solid var(--border);border-radius:10px;max-height:200px;overflow-y:auto;z-index:300;box-shadow:var(--shadow-lg);margin-top:4px"></div>
-      </div>
-    </div>
     <div class="form-row">
       <div class="form-group">
-        <label>Quantity</label>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input type="number" id="tx-qty" placeholder="0" style="flex:1">
-          <span id="tx-uom" style="font-size:13px;font-weight:700;color:var(--accent);min-width:32px;text-align:center"></span>
-        </div>
+        <label>Type</label>
+        <select id="tx-type">
+          <option value="in">Stock In</option>
+          <option value="out">Stock Out</option>
+        </select>
       </div>
       <div class="form-group">
         <label>Reference No.</label>
-        <input type="text" id="tx-ref" placeholder="PO-001">
+        <input type="text" id="tx-ref" placeholder="DO-001 / PO-001">
       </div>
     </div>
     <div class="form-group">
       <label>Reason / Notes</label>
       <input type="text" id="tx-reason" placeholder="Purchase / Production issue…">
     </div>
+    <div style="margin:12px 0 6px;font-size:13px;font-weight:600;color:var(--text-muted)">Items</div>
+    <div id="tx-lines"></div>
+    <button type="button" class="btn btn-secondary" style="width:100%;margin-top:8px;font-size:13px" onclick="addTxLine()"><i class="ti ti-plus"></i> Add Item</button>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-tx')">Cancel</button>
       <button class="btn btn-primary" style="width:auto" id="btn-tx-save" onclick="saveTransaction()">Confirm</button>
@@ -1408,6 +1402,7 @@ function exportTransactionsCSV() {
   toast(`Exported ${data.length} records`);
 }
 let txItemsCache = [];
+let txLineCount = 0;
 async function openTxModal() {
   const { data } = await sb.from('inventory').select('id,item_code,item_name,unit,quantity').order('item_name');
   txItemsCache = data || [];
@@ -1417,14 +1412,84 @@ async function openTxModal() {
   document.getElementById('tx-old-item-id').value='';
   document.getElementById('tx-old-qty').value='';
   document.getElementById('tx-old-type').value='';
-  document.getElementById('tx-type').value='in'; document.getElementById('tx-qty').value='';
-  document.getElementById('tx-ref').value=''; document.getElementById('tx-reason').value='';
-  document.getElementById('tx-item').value='';
-  document.getElementById('tx-item-search').value='';
-  document.getElementById('tx-uom').textContent='';
-  document.getElementById('tx-item-dropdown').style.display='none';
+  document.getElementById('tx-type').value='in';
+  document.getElementById('tx-ref').value='';
+  document.getElementById('tx-reason').value='';
+  document.getElementById('tx-lines').innerHTML='';
+  txLineCount=0;
+  addTxLine();
   openModal('modal-tx');
 }
+function addTxLine(prefillItemId='', prefillQty='') {
+  const idx = txLineCount++;
+  const div = document.createElement('div');
+  div.className = 'tx-line';
+  div.id = `tx-line-${idx}`;
+  div.innerHTML = `
+    <div class="tx-line-item">
+      <input type="text" id="tx-search-${idx}" placeholder="Search item…" autocomplete="off"
+        oninput="filterTxLine(${idx})" onfocus="showTxLineDD(${idx})">
+      <input type="hidden" id="tx-item-${idx}">
+      <div class="tx-line-dd" id="tx-dd-${idx}"></div>
+    </div>
+    <div class="tx-line-qty">
+      <input type="number" id="tx-qty-${idx}" placeholder="Qty" min="1">
+    </div>
+    <div class="tx-line-uom" id="tx-uom-${idx}"></div>
+    ${idx>0?`<button type="button" onclick="removeTxLine(${idx})" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:18px;padding:6px 2px;line-height:1">&times;</button>`:'<div style="width:24px"></div>'}
+  `;
+  document.getElementById('tx-lines').appendChild(div);
+  if (prefillItemId) {
+    const item = txItemsCache.find(i=>i.id===prefillItemId);
+    if (item) {
+      document.getElementById(`tx-item-${idx}`).value = item.id;
+      document.getElementById(`tx-search-${idx}`).value = `${item.item_name}  (${item.item_code})`;
+      document.getElementById(`tx-uom-${idx}`).textContent = item.unit||'';
+    }
+  }
+  if (prefillQty) document.getElementById(`tx-qty-${idx}`).value = prefillQty;
+}
+function removeTxLine(idx) {
+  const el = document.getElementById(`tx-line-${idx}`);
+  if (el) el.remove();
+}
+function filterTxLine(idx) {
+  const q = document.getElementById(`tx-search-${idx}`).value.toLowerCase();
+  const filtered = q ? txItemsCache.filter(i=>i.item_name.toLowerCase().includes(q)||i.item_code.toLowerCase().includes(q)) : txItemsCache;
+  renderTxLineDD(idx, filtered);
+  document.getElementById(`tx-dd-${idx}`).style.display='block';
+}
+function showTxLineDD(idx) {
+  const q = document.getElementById(`tx-search-${idx}`).value.toLowerCase();
+  const filtered = q ? txItemsCache.filter(i=>i.item_name.toLowerCase().includes(q)||i.item_code.toLowerCase().includes(q)) : txItemsCache;
+  renderTxLineDD(idx, filtered);
+  document.getElementById(`tx-dd-${idx}`).style.display='block';
+}
+function renderTxLineDD(idx, items) {
+  const dd = document.getElementById(`tx-dd-${idx}`);
+  if (!dd) return;
+  if (!items.length) { dd.innerHTML='<div style="padding:10px 14px;font-size:13px;color:var(--text-muted)">No items found</div>'; return; }
+  dd.innerHTML = items.slice(0,50).map(i=>`
+    <div onclick="selectTxLineItem(${idx},'${i.id}')" style="padding:9px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)"
+      onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='white'">
+      <strong>${i.item_name}</strong>
+      <span style="color:var(--text-muted);margin-left:8px;font-size:11px">${i.item_code}</span>
+      <span style="float:right;color:var(--text-muted);font-size:11px">${i.quantity} ${i.unit}</span>
+    </div>`).join('');
+}
+function selectTxLineItem(idx, itemId) {
+  const item = txItemsCache.find(i=>i.id===itemId);
+  if (!item) return;
+  document.getElementById(`tx-item-${idx}`).value = item.id;
+  document.getElementById(`tx-search-${idx}`).value = `${item.item_name}  (${item.item_code})`;
+  document.getElementById(`tx-uom-${idx}`).textContent = item.unit||'';
+  document.getElementById(`tx-dd-${idx}`).style.display='none';
+}
+document.addEventListener('click', e => {
+  document.querySelectorAll('.tx-line-dd').forEach(dd => {
+    if (!dd.parentElement.contains(e.target)) dd.style.display='none';
+  });
+});
 async function editTx(id) {
   const tx = allTransactions.find(x=>x.id===id);
   if (!tx) return;
@@ -1437,15 +1502,11 @@ async function editTx(id) {
   document.getElementById('tx-old-qty').value = tx.quantity;
   document.getElementById('tx-old-type').value = tx.type;
   document.getElementById('tx-type').value = tx.type;
-  document.getElementById('tx-qty').value = tx.quantity;
   document.getElementById('tx-ref').value = tx.reference_no||'';
   document.getElementById('tx-reason').value = tx.reason||'';
-  const itemId = tx.inventory_id||tx.item_id||'';
-  document.getElementById('tx-item').value = itemId;
-  const item = txItemsCache.find(i=>i.id===itemId);
-  document.getElementById('tx-item-search').value = item ? `${item.item_name}  (${item.item_code})` : '';
-  document.getElementById('tx-uom').textContent = tx.item_unit||item?.unit||'';
-  document.getElementById('tx-item-dropdown').style.display='none';
+  document.getElementById('tx-lines').innerHTML='';
+  txLineCount=0;
+  addTxLine(tx.inventory_id||tx.item_id||'', tx.quantity);
   openModal('modal-tx');
 }
 async function deleteTx(id) {
@@ -1456,93 +1517,70 @@ async function deleteTx(id) {
   if (itemId) {
     const { data: item } = await sb.from('inventory').select('quantity').eq('id',itemId).single();
     if (item) {
-      const reversed = tx.type==='in' ? item.quantity - tx.quantity : item.quantity + tx.quantity;
+      const reversed = tx.type==='in' ? item.quantity-tx.quantity : item.quantity+tx.quantity;
       await sb.from('inventory').update({quantity:Math.max(0,reversed),updated_at:new Date().toISOString()}).eq('id',itemId);
     }
   }
   await sb.from('stock_transactions').delete().eq('id',id);
   toast('Transaction deleted'); loadTransactions();
 }
-function filterTxItems() {
-  const q = document.getElementById('tx-item-search').value.toLowerCase();
-  const filtered = q ? txItemsCache.filter(i => i.item_name.toLowerCase().includes(q) || i.item_code.toLowerCase().includes(q)) : txItemsCache;
-  renderTxDropdown(filtered);
-  showTxDropdown();
-}
-function showTxDropdown() {
-  const q = document.getElementById('tx-item-search').value.toLowerCase();
-  const filtered = q ? txItemsCache.filter(i => i.item_name.toLowerCase().includes(q) || i.item_code.toLowerCase().includes(q)) : txItemsCache;
-  renderTxDropdown(filtered);
-  document.getElementById('tx-item-dropdown').style.display = 'block';
-}
-function renderTxDropdown(items) {
-  const dd = document.getElementById('tx-item-dropdown');
-  if (!items.length) {
-    dd.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text-muted)">No items found</div>';
-    return;
-  }
-  dd.innerHTML = items.map(i => `
-    <div onclick="selectTxItem('${i.id}')" style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);transition:background 0.1s"
-      onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='white'">
-      <strong>${i.item_name}</strong>
-      <span style="color:var(--text-muted);margin-left:8px;font-size:12px">${i.item_code}</span>
-      <span style="float:right;color:var(--text-muted);font-size:12px">${i.quantity} ${i.unit}</span>
-    </div>`).join('');
-}
-function selectTxItem(id) {
-  const item = txItemsCache.find(i => i.id === id);
-  if (!item) return;
-  document.getElementById('tx-item').value = item.id;
-  document.getElementById('tx-item-search').value = `${item.item_name}  (${item.item_code})`;
-  document.getElementById('tx-item-dropdown').style.display = 'none';
-  document.getElementById('tx-uom').textContent = item.unit || '';
-}
-function onTxItemChange() {}
-// Close dropdown when clicking outside
-document.addEventListener('click', e => {
-  if (!e.target.closest('#tx-item-search') && !e.target.closest('#tx-item-dropdown')) {
-    const dd = document.getElementById('tx-item-dropdown');
-    if (dd) dd.style.display = 'none';
-  }
-});
 async function saveTransaction() {
   const txId = document.getElementById('tx-id').value;
   const type = document.getElementById('tx-type').value;
-  const itemId = document.getElementById('tx-item').value;
-  const qty = parseInt(document.getElementById('tx-qty').value)||0;
-  if (!itemId) return toast('Please select an item','error');
-  if (!qty) return toast('Please enter a quantity','error');
-  const payload = { type, quantity:qty, reference_no:document.getElementById('tx-ref').value, reason:document.getElementById('tx-reason').value };
+  const ref = document.getElementById('tx-ref').value;
+  const reason = document.getElementById('tx-reason').value;
   if (txId) {
-    // Edit: reverse old qty on old item, apply new qty on (possibly new) item
+    // Single-line edit mode
+    const lineEl = document.getElementById('tx-line-0') || document.querySelector('.tx-line');
+    const idx = lineEl?.id?.split('-')[2]||0;
+    const itemId = document.getElementById(`tx-item-${idx}`).value;
+    const qty = parseInt(document.getElementById(`tx-qty-${idx}`).value)||0;
+    if (!itemId) return toast('Please select an item','error');
+    if (!qty) return toast('Please enter a quantity','error');
     const oldItemId = document.getElementById('tx-old-item-id').value;
     const oldQty = parseInt(document.getElementById('tx-old-qty').value)||0;
     const oldType = document.getElementById('tx-old-type').value;
-    // Reverse old effect
     if (oldItemId) {
       const { data: oldItem } = await sb.from('inventory').select('quantity').eq('id',oldItemId).single();
       if (oldItem) {
-        const reversed = oldType==='in' ? oldItem.quantity - oldQty : oldItem.quantity + oldQty;
-        await sb.from('inventory').update({quantity:Math.max(0,reversed),updated_at:new Date().toISOString()}).eq('id',oldItemId);
+        const rev = oldType==='in' ? oldItem.quantity-oldQty : oldItem.quantity+oldQty;
+        await sb.from('inventory').update({quantity:Math.max(0,rev),updated_at:new Date().toISOString()}).eq('id',oldItemId);
       }
     }
-    // Apply new effect
     const { data: item } = await sb.from('inventory').select('quantity').eq('id',itemId).single();
     const newQty = type==='in' ? item.quantity+qty : item.quantity-qty;
-    if (newQty<0) return toast('Insufficient stock for this transaction!','error');
-    const { error } = await sb.from('stock_transactions').update({...payload, item_id:itemId}).eq('id',txId);
+    if (newQty<0) return toast('Insufficient stock!','error');
+    const { error } = await sb.from('stock_transactions').update({type,quantity:qty,reference_no:ref,reason,item_id:itemId}).eq('id',txId);
     if (error) return toast('Save failed: '+error.message,'error');
     await sb.from('inventory').update({quantity:newQty,updated_at:new Date().toISOString()}).eq('id',itemId);
     closeModal('modal-tx'); toast('Transaction updated'); loadTransactions();
   } else {
-    // New transaction
-    const { data: item } = await sb.from('inventory').select('quantity').eq('id',itemId).single();
-    const newQty = type==='in' ? item.quantity+qty : item.quantity-qty;
-    if (newQty<0) return toast('Insufficient stock for this transaction!','error');
-    const { error } = await sb.from('stock_transactions').insert({ item_id:itemId, ...payload, created_by:currentUser.id });
-    if (error) return toast('Save failed: '+error.message,'error');
-    await sb.from('inventory').update({quantity:newQty,updated_at:new Date().toISOString()}).eq('id',itemId);
-    closeModal('modal-tx'); toast(type==='in'?'Stock in recorded':'Stock out recorded'); loadTransactions();
+    // Multi-line new transaction
+    const lines = [];
+    document.querySelectorAll('.tx-line').forEach(el => {
+      const idx = el.id.split('-')[2];
+      const itemId = document.getElementById(`tx-item-${idx}`)?.value;
+      const qty = parseInt(document.getElementById(`tx-qty-${idx}`)?.value)||0;
+      if (itemId && qty>0) lines.push({itemId, qty});
+    });
+    if (!lines.length) return toast('Please add at least one item','error');
+    // Validate stock for all out lines
+    for (const l of lines) {
+      if (type==='out') {
+        const { data: item } = await sb.from('inventory').select('quantity,item_name').eq('id',l.itemId).single();
+        if (!item || item.quantity < l.qty) return toast(`Insufficient stock for ${item?.item_name||'item'}!`,'error');
+      }
+    }
+    // Insert all
+    for (const l of lines) {
+      const { data: item } = await sb.from('inventory').select('quantity').eq('id',l.itemId).single();
+      const newQty = type==='in' ? item.quantity+l.qty : item.quantity-l.qty;
+      await sb.from('stock_transactions').insert({item_id:l.itemId,type,quantity:l.qty,reference_no:ref,reason,created_by:currentUser.id});
+      await sb.from('inventory').update({quantity:newQty,updated_at:new Date().toISOString()}).eq('id',l.itemId);
+    }
+    closeModal('modal-tx');
+    toast(`${lines.length} item(s) recorded`);
+    loadTransactions();
   }
 }
 
