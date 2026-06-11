@@ -966,21 +966,18 @@ async function handleLogin() {
   if (!email || !pass) return showAuthMsg('Please fill in all fields.');
   const btn = document.getElementById('btn-login');
   btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i> Signing in…';
-
-  // Wipe all local storage to guarantee a clean state
-  localStorage.clear();
-  sessionStorage.clear();
-
+  appInitialized = false;
   try {
     const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
-    btn.disabled = false; btn.innerHTML = '<i class="ti ti-login"></i> Sign In';
-    if (error) return showAuthMsg(error.message);
-    // Manually trigger app load in case onAuthStateChange doesn't fire
-    if (data?.user && !appInitialized) {
-      appInitialized = true;
+    if (error) {
+      btn.disabled = false; btn.innerHTML = '<i class="ti ti-login"></i> Sign In';
+      return showAuthMsg(error.message);
+    }
+    if (data?.user) {
       currentUser = data.user;
       await ensureProfile(data.user);
       await loadProfile();
+      appInitialized = true;
       document.getElementById('auth-screen').style.display = 'none';
       document.getElementById('app').style.display = 'flex';
       initApp();
