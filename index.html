@@ -399,6 +399,9 @@
         <div class="nav-item" onclick="goTo('workorders')">
           <i class="ti ti-clipboard-list"></i> Work Orders
         </div>
+        <div class="nav-item" onclick="goTo('wip')">
+          <i class="ti ti-activity"></i> WIP Monitoring
+        </div>
       </div>
       <div class="nav-section">
         <div class="nav-section-label">Warehouse</div>
@@ -407,25 +410,6 @@
         </div>
         <div class="nav-item" onclick="goTo('transactions')">
           <i class="ti ti-arrows-exchange"></i> Stock In / Out
-        </div>
-      </div>
-      <div class="nav-section">
-        <div class="nav-section-label">Equipment</div>
-        <div class="nav-item" onclick="goTo('equipment')">
-          <i class="ti ti-tool"></i> Equipment List
-        </div>
-        <div class="nav-item" onclick="goTo('maintenance')">
-          <i class="ti ti-alert-triangle"></i> Maintenance
-          <span class="nav-badge" id="repair-badge" style="display:none">0</span>
-        </div>
-      </div>
-      <div class="nav-section">
-        <div class="nav-section-label">People</div>
-        <div class="nav-item" onclick="goTo('attendance')">
-          <i class="ti ti-calendar-check"></i> Attendance
-        </div>
-        <div class="nav-item admin-only" onclick="goTo('employees')" style="display:none">
-          <i class="ti ti-users"></i> Employees
         </div>
       </div>
       <div class="nav-section">
@@ -612,6 +596,13 @@
               <tbody id="tx-tbody"></tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      <!-- WIP MONITORING -->
+      <div class="page" id="page-wip">
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px" id="wip-stations-grid">
+          <!-- rendered by JS -->
         </div>
       </div>
 
@@ -895,6 +886,57 @@
   </div>
 </div>
 
+<!-- WIP Entry Modal -->
+<div class="modal-overlay" id="modal-wip">
+  <div class="modal">
+    <h2 id="modal-wip-title">Log WIP Entry</h2>
+    <input type="hidden" id="wip-id">
+    <input type="hidden" id="wip-station">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Workstation</label>
+        <input type="text" id="wip-station-display" disabled style="opacity:0.6;text-transform:capitalize">
+      </div>
+      <div class="form-group">
+        <label>Work Date</label>
+        <input type="date" id="wip-date">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Product Name</label>
+      <input type="text" id="wip-product" placeholder="e.g. Kampua Mee Original">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Output (kg)</label>
+        <input type="number" id="wip-output" placeholder="0" min="0" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>Duration (min)</label>
+        <input type="number" id="wip-duration" placeholder="0" min="0">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Wastage (kg)</label>
+        <input type="number" id="wip-wastage" placeholder="0" min="0" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>Reject (qty)</label>
+        <input type="number" id="wip-reject" placeholder="0" min="0">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Notes</label>
+      <input type="text" id="wip-notes" placeholder="Any remarks…">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-wip')">Cancel</button>
+      <button class="btn btn-primary" style="width:auto" onclick="saveWip()"><i class="ti ti-check"></i> Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Equipment Modal -->
 <div class="modal-overlay" id="modal-eq">
   <div class="modal">
@@ -1154,15 +1196,13 @@ async function loadProfile() {
 // ─── NAVIGATION ──────────────────────────────────────
 const pageTitles = {
   dashboard: 'Dashboard', workorders: 'Work Orders', inventory: 'Inventory',
-  transactions: 'Stock In / Out', equipment: 'Equipment', maintenance: 'Maintenance',
-  attendance: 'Attendance', employees: 'Employees', ai: 'AI Assistant'
+  transactions: 'Stock In / Out', wip: 'WIP Monitoring', ai: 'AI Assistant'
 };
 const pageActions = {
   workorders: () => currentProfile?.role==='admin' ? `<button class="btn btn-primary" style="width:auto" onclick="openWOModal()"><i class="ti ti-plus"></i> New Order</button>` : '',
   inventory: () => currentProfile?.role==='admin' ? `<button class="btn btn-primary" style="width:auto" onclick="openInvModal()"><i class="ti ti-plus"></i> New Item</button>` : '',
   transactions: () => `<button class="btn btn-primary" style="width:auto" onclick="openTxModal()"><i class="ti ti-plus"></i> New Transaction</button>`,
-  equipment: () => currentProfile?.role==='admin' ? `<button class="btn btn-primary" style="width:auto" onclick="openEqModal()"><i class="ti ti-plus"></i> Add Equipment</button>` : '',
-  maintenance: () => `<button class="btn btn-primary" style="width:auto" onclick="openMtModal()"><i class="ti ti-alert-triangle"></i> Submit Report</button>`,
+  wip: () => '',
 };
 
 function goTo(page) {
@@ -1176,7 +1216,7 @@ function goTo(page) {
 }
 
 function loadPage(page) {
-  const map = { dashboard:loadDashboard, workorders:loadWorkOrders, inventory:loadInventory, transactions:loadTransactions, equipment:loadEquipment, maintenance:loadMaintenance, attendance:loadAttendance, employees:loadEmployees };
+  const map = { dashboard:loadDashboard, workorders:loadWorkOrders, inventory:loadInventory, transactions:loadTransactions, wip:loadWip };
   map[page]?.();
 }
 
@@ -1714,6 +1754,131 @@ async function saveTransaction() {
     toast(`${lines.length} item(s) recorded`);
     loadTransactions(); renderProductionChart();
   }
+}
+
+// ─── WIP MONITORING ─────────────────────────────────
+const WIP_STATIONS = [
+  { id:'preparing', label:'Preparing',  icon:'ti-salad',        color:'#6c63ff' },
+  { id:'cooking',   label:'Cooking',    icon:'ti-flame',        color:'#f97316' },
+  { id:'filling',   label:'Filling',    icon:'ti-bottle',       color:'#43c6a8' },
+  { id:'packing',   label:'Packing',    icon:'ti-package',      color:'#f59e0b' },
+];
+let allWip = [];
+async function loadWip() {
+  const today = new Date().toISOString().slice(0,10);
+  const { data } = await sb.from('wip_entries')
+    .select('*, creator:profiles!created_by(name)')
+    .order('created_at',{ascending:false}).limit(200);
+  allWip = data || [];
+  renderWipStations();
+}
+function renderWipStations() {
+  const grid = document.getElementById('wip-stations-grid');
+  if (!grid) return;
+  grid.innerHTML = WIP_STATIONS.map(st => {
+    const entries = allWip.filter(e=>e.workstation===st.id);
+    const todayEntries = entries.filter(e=>e.work_date===new Date().toISOString().slice(0,10));
+    const totalOutput = todayEntries.reduce((s,e)=>s+(parseFloat(e.output_kg)||0),0);
+    const totalWaste  = todayEntries.reduce((s,e)=>s+(parseFloat(e.wastage_kg)||0),0);
+    const totalReject = todayEntries.reduce((s,e)=>s+(parseFloat(e.reject_qty)||0),0);
+    return `<div class="card">
+      <div class="card-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:38px;height:38px;border-radius:10px;background:${st.color}22;display:flex;align-items:center;justify-content:center">
+            <i class="ti ${st.icon}" style="font-size:20px;color:${st.color}"></i>
+          </div>
+          <div>
+            <div class="card-title" style="margin:0">${st.label}</div>
+            <div style="font-size:11px;color:var(--text-muted)">Today: ${todayEntries.length} log(s)</div>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" style="width:auto" onclick="openWipModal('${st.id}')">
+          <i class="ti ti-plus"></i> Log
+        </button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 16px;border-bottom:1px solid var(--border)">
+        <div style="text-align:center">
+          <div style="font-size:18px;font-weight:800;color:${st.color}">${totalOutput.toFixed(1)}</div>
+          <div style="font-size:10px;color:var(--text-muted)">Output (kg)</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:18px;font-weight:800;color:var(--warning)">${totalWaste.toFixed(1)}</div>
+          <div style="font-size:10px;color:var(--text-muted)">Wastage (kg)</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:18px;font-weight:800;color:var(--danger)">${totalReject}</div>
+          <div style="font-size:10px;color:var(--text-muted)">Reject (qty)</div>
+        </div>
+      </div>
+      <div style="max-height:220px;overflow-y:auto">
+        ${entries.length ? `<table style="width:100%"><thead><tr style="background:var(--bg)">
+          <th style="padding:7px 12px;font-size:11px;text-align:left">Date</th>
+          <th style="padding:7px 12px;font-size:11px;text-align:left">Product</th>
+          <th style="padding:7px 12px;font-size:11px;text-align:right">Output</th>
+          <th style="padding:7px 12px;font-size:11px;text-align:right">Waste</th>
+          <th style="padding:7px 12px;font-size:11px;text-align:right">Reject</th>
+          <th style="padding:7px 12px;font-size:11px;text-align:right">Min</th>
+          <th style="padding:7px 12px;font-size:11px"></th>
+        </tr></thead><tbody>
+          ${entries.slice(0,10).map(e=>`<tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:7px 12px;font-size:12px">${e.work_date||'—'}</td>
+            <td style="padding:7px 12px;font-size:12px">${e.product_name||'—'}</td>
+            <td style="padding:7px 12px;font-size:12px;text-align:right;font-weight:600">${e.output_kg??'—'}</td>
+            <td style="padding:7px 12px;font-size:12px;text-align:right;color:var(--warning)">${e.wastage_kg??'—'}</td>
+            <td style="padding:7px 12px;font-size:12px;text-align:right;color:var(--danger)">${e.reject_qty??'—'}</td>
+            <td style="padding:7px 12px;font-size:12px;text-align:right;color:var(--text-muted)">${e.duration_min??'—'}</td>
+            <td style="padding:7px 12px;text-align:right">
+              <button class="btn btn-secondary btn-sm" onclick="editWip('${e.id}')"><i class="ti ti-edit"></i></button>
+              <button class="btn btn-danger btn-sm" onclick="deleteWip('${e.id}')"><i class="ti ti-trash"></i></button>
+            </td>
+          </tr>`).join('')}
+        </tbody></table>`
+        : `<div class="empty-state" style="padding:24px"><i class="ti ti-clipboard"></i><p>No entries yet</p></div>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+function openWipModal(station, data=null) {
+  document.getElementById('modal-wip-title').textContent = data ? 'Edit WIP Entry' : 'Log WIP Entry';
+  document.getElementById('wip-id').value = data?.id||'';
+  document.getElementById('wip-station').value = station;
+  document.getElementById('wip-station-display').value = station.charAt(0).toUpperCase()+station.slice(1);
+  document.getElementById('wip-date').value = data?.work_date || new Date().toISOString().slice(0,10);
+  document.getElementById('wip-product').value = data?.product_name||'';
+  document.getElementById('wip-output').value = data?.output_kg??'';
+  document.getElementById('wip-duration').value = data?.duration_min??'';
+  document.getElementById('wip-wastage').value = data?.wastage_kg??'';
+  document.getElementById('wip-reject').value = data?.reject_qty??'';
+  document.getElementById('wip-notes').value = data?.notes||'';
+  openModal('modal-wip');
+}
+function editWip(id) {
+  const e = allWip.find(x=>x.id===id);
+  if (e) openWipModal(e.workstation, e);
+}
+async function deleteWip(id) {
+  if (!confirm('Delete this entry?')) return;
+  await sb.from('wip_entries').delete().eq('id',id);
+  toast('Entry deleted'); loadWip();
+}
+async function saveWip() {
+  const id = document.getElementById('wip-id').value;
+  const payload = {
+    workstation: document.getElementById('wip-station').value,
+    work_date:   document.getElementById('wip-date').value,
+    product_name:document.getElementById('wip-product').value,
+    output_kg:   parseFloat(document.getElementById('wip-output').value)||0,
+    wastage_kg:  parseFloat(document.getElementById('wip-wastage').value)||0,
+    reject_qty:  parseFloat(document.getElementById('wip-reject').value)||0,
+    duration_min:parseInt(document.getElementById('wip-duration').value)||null,
+    notes:       document.getElementById('wip-notes').value,
+    created_by:  currentUser.id,
+  };
+  const { error } = id
+    ? await sb.from('wip_entries').update(payload).eq('id',id)
+    : await sb.from('wip_entries').insert(payload);
+  if (error) return toast('Save failed: '+error.message,'error');
+  closeModal('modal-wip'); toast('Entry saved'); loadWip();
 }
 
 // ─── EQUIPMENT ──────────────────────────────────────
