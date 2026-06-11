@@ -567,6 +567,9 @@
             <option value="in">Stock In</option>
             <option value="out">Stock Out</option>
           </select>
+          <select class="filter-select" id="tx-category-filter" onchange="filterTransactions()">
+            <option value="">All Categories</option>
+          </select>
           <input type="date" class="filter-select" id="tx-date-from" onchange="filterTransactions()" title="From date">
           <input type="date" class="filter-select" id="tx-date-to" onchange="filterTransactions()" title="To date">
           <button class="btn btn-secondary" onclick="exportTransactionsCSV()" style="white-space:nowrap"><i class="ti ti-download"></i> Export CSV</button>
@@ -1230,8 +1233,9 @@ async function loadInventory() {
   const { data } = await sb.from('inventory').select('*').order('item_name');
   allInventory = data || [];
   const cats = [...new Set(data.map(i=>i.category).filter(Boolean))];
-  const sel = document.getElementById('inv-cat-filter');
-  sel.innerHTML = '<option value="">All Categories</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+  const catOpts = cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+  document.getElementById('inv-cat-filter').innerHTML = '<option value="">All Categories</option>' + catOpts;
+  document.getElementById('tx-category-filter').innerHTML = '<option value="">All Categories</option>' + catOpts;
   renderInventory(allInventory);
 }
 function filterInventory() {
@@ -1284,12 +1288,15 @@ async function loadTransactions() {
 function getFilteredTransactions() {
   const q = document.getElementById('tx-search').value.toLowerCase();
   const t = document.getElementById('tx-type-filter').value;
+  const cat = document.getElementById('tx-category-filter').value;
   const from = document.getElementById('tx-date-from').value;
   const to = document.getElementById('tx-date-to').value;
   return allTransactions.filter(x => {
     const dateStr = x.created_at?.slice(0,10) || '';
+    const itemCat = allInventory.find(i=>i.id===x.inventory_id)?.category || '';
     return (!q || x.item?.item_name?.toLowerCase().includes(q) || x.reference_no?.toLowerCase().includes(q))
       && (!t || x.type === t)
+      && (!cat || itemCat === cat)
       && (!from || dateStr >= from)
       && (!to || dateStr <= to);
   });
