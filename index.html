@@ -904,7 +904,9 @@
     </div>
     <div class="form-group">
       <label>Product Name</label>
-      <input type="text" id="wip-product" placeholder="e.g. Kampua Mee Original">
+      <select id="wip-product">
+        <option value="">— Select product —</option>
+      </select>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -1758,11 +1760,15 @@ async function saveTransaction() {
 
 // ─── WIP MONITORING ─────────────────────────────────
 const WIP_STATIONS = [
-  { id:'preparing', label:'Preparing',  icon:'ti-salad',        color:'#6c63ff' },
-  { id:'cooking',   label:'Cooking',    icon:'ti-flame',        color:'#f97316' },
-  { id:'filling',   label:'Filling',    icon:'ti-bottle',       color:'#43c6a8' },
-  { id:'packing',   label:'Packing',    icon:'ti-package',      color:'#f59e0b' },
+  { id:'preparing', label:'Preparing', icon:'ti-salad',  color:'#6c63ff' },
+  { id:'cooking',   label:'Cooking',   icon:'ti-flame',  color:'#f97316' },
+  { id:'filling',   label:'Filling',   icon:'ti-bottle', color:'#43c6a8' },
 ];
+const WIP_PRODUCTS = {
+  preparing: ['CABBAGE','GINGER','SWEET RADISH','TOMATO','LEMONGRASS/SERAI','GALANGAL/LENGKUAS','TURMERIC/KUNYIT','VIETNAMESE CORIANDER/DAUN KESUM','CHILI','KAFFIR LIME LEAVE/DAU LIMAU','POTATO','SWEET CORN','THAI CORIANDER/DAUN KETUMBAR THAILAND'],
+  cooking:   ['TSO','GTY','SWEET RADISH','SOY SAUCE','TY','GARNISH (CABBAGE)','LUNCH BOX','CLO','SHCR'],
+  filling:   ['TSO','GTY','SWEET RADISH','SOY SAUCE','TY','GARNISH (CABBAGE)','CLO','SHCR','DIY','MALA','BBQ','OAT MILK POWDER'],
+};
 let allWip = [];
 async function loadWip() {
   const { data, error } = await sb.from('wip_entries')
@@ -1844,7 +1850,10 @@ function openWipModal(station, data=null) {
   document.getElementById('wip-station').value = station;
   document.getElementById('wip-station-display').value = station.charAt(0).toUpperCase()+station.slice(1);
   document.getElementById('wip-date').value = data?.work_date || new Date().toISOString().slice(0,10);
-  document.getElementById('wip-product').value = data?.product_name||'';
+  const products = WIP_PRODUCTS[station] || [];
+  const sel = document.getElementById('wip-product');
+  sel.innerHTML = '<option value="">— Select product —</option>' + products.map(p=>`<option value="${p}"${data?.product_name===p?' selected':''}>${p}</option>`).join('');
+
   document.getElementById('wip-output').value = data?.output_kg??'';
   document.getElementById('wip-duration').value = data?.duration_min??'';
   document.getElementById('wip-wastage').value = data?.wastage_kg??'';
