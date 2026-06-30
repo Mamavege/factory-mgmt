@@ -418,6 +418,12 @@
           <i class="ti ti-robot"></i> AI Assistant
         </div>
       </div>
+      <div class="nav-section">
+        <div class="nav-section-label">Finance</div>
+        <div class="nav-item" onclick="goTo('costing')">
+          <i class="ti ti-calculator"></i> Costing
+        </div>
+      </div>
     </nav>
     <div class="sidebar-footer">
       <div class="user-info" onclick="handleLogout()">
@@ -715,6 +721,57 @@
           <div class="ai-chip" onclick="quickAsk('Which materials are below minimum stock level and need restocking?')">📦 Restock Alert</div>
           <div class="ai-chip" onclick="quickAsk('Which equipment needs repair or maintenance right now?')">🔧 Equipment Health</div>
           <div class="ai-chip" onclick="quickAsk('How many employees clocked in today?')">👥 Today's Attendance</div>
+        </div>
+      </div>
+
+      <!-- COSTING -->
+      <div class="page" id="page-costing">
+        <div class="stats-grid" style="margin-bottom:20px">
+          <div class="stat-card">
+            <div class="stat-top">
+              <div class="stat-label">Products Costed</div>
+              <div class="stat-icon" style="background:#f0fdf4"><i class="ti ti-calculator" style="color:var(--success)"></i></div>
+            </div>
+            <div class="stat-value" id="costing-stat-count">—</div>
+            <div class="stat-sub">Cost sheets entered</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-top">
+              <div class="stat-label">Avg Gross Margin</div>
+              <div class="stat-icon" style="background:var(--accent-soft)"><i class="ti ti-chart-pie" style="color:var(--accent)"></i></div>
+            </div>
+            <div class="stat-value" id="costing-stat-margin">—</div>
+            <div class="stat-sub">Across all products</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-top">
+              <div class="stat-label">Highest Margin</div>
+              <div class="stat-icon" style="background:#fff8e6"><i class="ti ti-trending-up" style="color:var(--warning)"></i></div>
+            </div>
+            <div class="stat-value" id="costing-stat-best" style="font-size:18px;letter-spacing:0">—</div>
+            <div class="stat-sub">Most profitable product</div>
+          </div>
+        </div>
+        <div class="search-bar">
+          <input class="search-input" id="costing-search" placeholder="Search product name…" oninput="costingFilter()">
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Product</th>
+                <th>Material Cost</th>
+                <th>Labour Cost</th>
+                <th>Overhead</th>
+                <th>Total Cost</th>
+                <th>Selling Price</th>
+                <th>Gross Margin</th>
+                <th>Notes</th>
+                <th>Actions</th>
+              </tr></thead>
+              <tbody id="costing-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -1041,6 +1098,50 @@
   </div>
 </div>
 
+<!-- Costing Modal -->
+<div class="modal-overlay" id="modal-costing">
+  <div class="modal">
+    <h2 id="modal-costing-title">New Cost Sheet</h2>
+    <input type="hidden" id="costing-id">
+    <div class="form-group">
+      <label>Product Name</label>
+      <input type="text" id="costing-product" placeholder="e.g. Spinach Pack 250g">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Material Cost (RM)</label>
+        <input type="number" id="costing-material" placeholder="0.00" step="0.01" min="0" oninput="costingCalcTotal()">
+      </div>
+      <div class="form-group">
+        <label>Labour Cost (RM)</label>
+        <input type="number" id="costing-labour" placeholder="0.00" step="0.01" min="0" oninput="costingCalcTotal()">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Overhead (RM)</label>
+        <input type="number" id="costing-overhead" placeholder="0.00" step="0.01" min="0" oninput="costingCalcTotal()">
+      </div>
+      <div class="form-group">
+        <label>Selling Price (RM)</label>
+        <input type="number" id="costing-selling" placeholder="0.00" step="0.01" min="0" oninput="costingCalcTotal()">
+      </div>
+    </div>
+    <div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:14px;display:flex;gap:24px;flex-wrap:wrap">
+      <div><div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Total Cost</div><div id="costing-calc-total" style="font-size:20px;font-weight:800;margin-top:4px">RM 0.00</div></div>
+      <div><div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Gross Margin</div><div id="costing-calc-margin" style="font-size:20px;font-weight:800;margin-top:4px">—</div></div>
+    </div>
+    <div class="form-group">
+      <label>Notes</label>
+      <textarea id="costing-notes" rows="2" placeholder="Any remarks…"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-costing')">Cancel</button>
+      <button class="btn btn-primary" style="width:auto" onclick="costingSave()"><i class="ti ti-check"></i> Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"><i class="ti ti-check"></i> <span id="toast-msg"></span></div>
 
@@ -1198,13 +1299,15 @@ async function loadProfile() {
 // ─── NAVIGATION ──────────────────────────────────────
 const pageTitles = {
   dashboard: 'Dashboard', workorders: 'Work Orders', inventory: 'Inventory',
-  transactions: 'Stock In / Out', wip: 'WIP Monitoring', ai: 'AI Assistant'
+  transactions: 'Stock In / Out', wip: 'WIP Monitoring', ai: 'AI Assistant',
+  costing: 'Costing'
 };
 const pageActions = {
   workorders: () => currentProfile?.role==='admin' ? `<button class="btn btn-primary" style="width:auto" onclick="openWOModal()"><i class="ti ti-plus"></i> New Order</button>` : '',
   inventory: () => currentProfile?.role==='admin' ? `<button class="btn btn-primary" style="width:auto" onclick="openInvModal()"><i class="ti ti-plus"></i> New Item</button>` : '',
   transactions: () => `<button class="btn btn-primary" style="width:auto" onclick="openTxModal()"><i class="ti ti-plus"></i> New Transaction</button>`,
   wip: () => '',
+  costing: () => `<button class="btn btn-primary" style="width:auto" onclick="costingOpenModal()"><i class="ti ti-plus"></i> New Cost Sheet</button>`,
 };
 
 function goTo(page) {
@@ -1218,7 +1321,7 @@ function goTo(page) {
 }
 
 function loadPage(page) {
-  const map = { dashboard:loadDashboard, workorders:loadWorkOrders, inventory:loadInventory, transactions:loadTransactions, wip:loadWip };
+  const map = { dashboard:loadDashboard, workorders:loadWorkOrders, inventory:loadInventory, transactions:loadTransactions, wip:loadWip, costing:costingLoad };
   map[page]?.();
 }
 
@@ -2238,6 +2341,131 @@ async function deletePlan(id) {
   toast('Deleted');
   await loadCalendar();
   if (calSelectedDate) selectCalDay(calSelectedDate);
+}
+
+// ─── COSTING ────────────────────────────────────────
+let allCostingEntries = [];
+
+async function costingLoad() {
+  const { data, error } = await sb.from('costing_entries').select('*').order('created_at', { ascending: false });
+  if (error) { console.error('costing load error:', error); return; }
+  allCostingEntries = data || [];
+  costingRender(allCostingEntries);
+  costingUpdateStats(allCostingEntries);
+}
+
+function costingFilter() {
+  const q = document.getElementById('costing-search').value.toLowerCase();
+  const filtered = allCostingEntries.filter(r => r.product_name.toLowerCase().includes(q));
+  costingRender(filtered);
+}
+
+function costingRender(rows) {
+  const tbody = document.getElementById('costing-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><i class="ti ti-calculator"></i><p>No cost sheets yet. Click "New Cost Sheet" to add one.</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const total = (Number(r.material_cost)||0) + (Number(r.labour_cost)||0) + (Number(r.overhead_cost)||0);
+    const selling = Number(r.selling_price) || 0;
+    const margin = selling > 0 ? ((selling - total) / selling * 100).toFixed(1) : null;
+    const marginBadge = margin === null ? '<span class="badge badge-gray">N/A</span>'
+      : Number(margin) >= 20 ? `<span class="badge badge-success">${margin}%</span>`
+      : Number(margin) >= 0 ? `<span class="badge badge-warning">${margin}%</span>`
+      : `<span class="badge badge-danger">${margin}%</span>`;
+    return `<tr>
+      <td><strong>${r.product_name}</strong></td>
+      <td>RM ${Number(r.material_cost||0).toFixed(2)}</td>
+      <td>RM ${Number(r.labour_cost||0).toFixed(2)}</td>
+      <td>RM ${Number(r.overhead_cost||0).toFixed(2)}</td>
+      <td><strong>RM ${total.toFixed(2)}</strong></td>
+      <td>RM ${selling.toFixed(2)}</td>
+      <td>${marginBadge}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted)">${r.notes||'—'}</td>
+      <td>
+        <button class="btn btn-secondary btn-sm" onclick="costingOpenModal(${JSON.stringify(r).replace(/"/g,'&quot;')})"><i class="ti ti-edit"></i></button>
+        <button class="btn btn-danger btn-sm" onclick="costingDelete('${r.id}')"><i class="ti ti-trash"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function costingUpdateStats(rows) {
+  document.getElementById('costing-stat-count').textContent = rows.length;
+  const withSelling = rows.filter(r => Number(r.selling_price) > 0);
+  if (withSelling.length) {
+    const margins = withSelling.map(r => {
+      const total = (Number(r.material_cost)||0) + (Number(r.labour_cost)||0) + (Number(r.overhead_cost)||0);
+      return (Number(r.selling_price) - total) / Number(r.selling_price) * 100;
+    });
+    const avg = margins.reduce((a,b)=>a+b,0)/margins.length;
+    document.getElementById('costing-stat-margin').textContent = avg.toFixed(1) + '%';
+    const bestIdx = margins.indexOf(Math.max(...margins));
+    document.getElementById('costing-stat-best').textContent = withSelling[bestIdx].product_name;
+  } else {
+    document.getElementById('costing-stat-margin').textContent = '—';
+    document.getElementById('costing-stat-best').textContent = '—';
+  }
+}
+
+function costingOpenModal(row) {
+  document.getElementById('modal-costing-title').textContent = row ? 'Edit Cost Sheet' : 'New Cost Sheet';
+  document.getElementById('costing-id').value = row?.id || '';
+  document.getElementById('costing-product').value = row?.product_name || '';
+  document.getElementById('costing-material').value = row?.material_cost || '';
+  document.getElementById('costing-labour').value = row?.labour_cost || '';
+  document.getElementById('costing-overhead').value = row?.overhead_cost || '';
+  document.getElementById('costing-selling').value = row?.selling_price || '';
+  document.getElementById('costing-notes').value = row?.notes || '';
+  costingCalcTotal();
+  document.getElementById('modal-costing').classList.add('open');
+}
+
+function costingCalcTotal() {
+  const m = Number(document.getElementById('costing-material').value) || 0;
+  const l = Number(document.getElementById('costing-labour').value) || 0;
+  const o = Number(document.getElementById('costing-overhead').value) || 0;
+  const s = Number(document.getElementById('costing-selling').value) || 0;
+  const total = m + l + o;
+  document.getElementById('costing-calc-total').textContent = 'RM ' + total.toFixed(2);
+  if (s > 0) {
+    const margin = ((s - total) / s * 100).toFixed(1);
+    const color = Number(margin) >= 20 ? 'var(--success)' : Number(margin) >= 0 ? 'var(--warning)' : 'var(--danger)';
+    document.getElementById('costing-calc-margin').innerHTML = `<span style="color:${color}">${margin}%</span>`;
+  } else {
+    document.getElementById('costing-calc-margin').textContent = '—';
+  }
+}
+
+async function costingSave() {
+  const product = document.getElementById('costing-product').value.trim();
+  if (!product) return toast('Please enter a product name.', 'error');
+  const id = document.getElementById('costing-id').value;
+  const payload = {
+    product_name: product,
+    material_cost: Number(document.getElementById('costing-material').value) || 0,
+    labour_cost:   Number(document.getElementById('costing-labour').value) || 0,
+    overhead_cost: Number(document.getElementById('costing-overhead').value) || 0,
+    selling_price: Number(document.getElementById('costing-selling').value) || 0,
+    notes: document.getElementById('costing-notes').value.trim(),
+    created_by: currentUser.id,
+  };
+  const { error } = id
+    ? await sb.from('costing_entries').update(payload).eq('id', id)
+    : await sb.from('costing_entries').insert(payload);
+  if (error) return toast('Save failed: ' + error.message, 'error');
+  closeModal('modal-costing');
+  toast('Cost sheet saved');
+  costingLoad();
+}
+
+async function costingDelete(id) {
+  if (!confirm('Delete this cost sheet?')) return;
+  const { error } = await sb.from('costing_entries').delete().eq('id', id);
+  if (error) return toast('Delete failed: ' + error.message, 'error');
+  toast('Deleted');
+  costingLoad();
 }
 
 // ─── HELPERS ────────────────────────────────────────
