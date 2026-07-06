@@ -439,7 +439,7 @@
 
       <!-- DASHBOARD -->
       <div class="page active" id="page-dashboard">
-        <div id="july-import-banner" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
+        <div id="july-import-banner" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:16px;align-items:center;gap:12px">
           <span style="flex:1">⚠️ <strong>Admin:</strong> July 2026 stock transactions not yet imported.</span>
           <button class="btn btn-primary" style="width:auto" onclick="runJulyImport()" id="july-import-btn">Import July Data</button>
         </div>
@@ -1350,10 +1350,11 @@ async function renderProductionChart() {
 
 // ─── JULY 2026 ONE-TIME IMPORT ───────────────────────
 async function checkJulyImport() {
-  if (currentProfile?.role !== 'admin') return;
-  const { count } = await sb.from('stock_transactions').select('*',{count:'exact',head:true}).eq('reference_no','JULY-2026-01');
   const banner = document.getElementById('july-import-banner');
-  if (banner) banner.style.display = count === 0 ? 'flex' : 'none';
+  if (!banner) return;
+  if (currentProfile?.role !== 'admin') { banner.style.display = 'none'; return; }
+  const { count, error } = await sb.from('stock_transactions').select('*',{count:'exact',head:true}).eq('reference_no','JULY-2026-01');
+  banner.style.display = (count === 0 || error) ? 'flex' : 'none';
 }
 
 async function runJulyImport() {
