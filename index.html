@@ -904,6 +904,12 @@
         <option value="">— Select product —</option>
       </select>
     </div>
+    <div class="form-group" id="wip-target-group" style="display:none">
+      <label>Preparing For (WIP / FG)</label>
+      <select id="wip-target">
+        <option value="">— Select target —</option>
+      </select>
+    </div>
     <div class="form-row">
       <div class="form-group">
         <label>Raw Material Input (kg)</label>
@@ -1820,6 +1826,8 @@ const WIP_PRODUCTS = {
   cooking:   ['TSO','GTY','SWEET RADISH','SOY SAUCE','TY','GARNISH (CABBAGE)','LUNCH BOX','CLO','SHCR'],
   filling:   ['TSO','GTY','SWEET RADISH','SOY SAUCE','TY','GARNISH (CABBAGE)','CLO','SHCR','DIY','MALA','BBQ','OAT MILK POWDER'],
 };
+// Target WIP/FG that raw material is being prepared for (used by Preparing station for costing)
+const WIP_PREP_TARGETS = [...new Set([...WIP_PRODUCTS.cooking, ...WIP_PRODUCTS.filling])];
 let allWip = [];
 async function loadWip() {
   const { data, error } = await sb.from('wip_entries')
@@ -1893,7 +1901,7 @@ function renderWipStations() {
             const yld = inK>0 ? (outK/inK*100).toFixed(1)+'%' : '—';
             return `<tr style="border-bottom:1px solid var(--border)">
             <td style="padding:7px 12px;font-size:12px">${e.work_date||'—'}</td>
-            <td style="padding:7px 12px;font-size:12px">${e.product_name||'—'}</td>
+            <td style="padding:7px 12px;font-size:12px">${e.product_name||'—'}${e.prepared_for?`<br><small style="color:var(--text-muted)">→ ${e.prepared_for}</small>`:''}</td>
             <td style="padding:7px 12px;font-size:12px;text-align:right">${e.input_kg??'—'}</td>
             <td style="padding:7px 12px;font-size:12px;text-align:right;font-weight:600">${e.output_kg??'—'}</td>
             <td style="padding:7px 12px;font-size:12px;text-align:right;color:var(--success);font-weight:600">${yld}</td>
@@ -1919,6 +1927,17 @@ function openWipModal(station, data=null) {
   const products = WIP_PRODUCTS[station] || [];
   const sel = document.getElementById('wip-product');
   sel.innerHTML = '<option value="">— Select product —</option>' + products.map(p=>`<option value="${p}"${data?.product_name===p?' selected':''}>${p}</option>`).join('');
+
+  // "Preparing For" target — only for the Preparing station (links raw material to a WIP/FG for costing)
+  const targetGroup = document.getElementById('wip-target-group');
+  const targetSel = document.getElementById('wip-target');
+  if (station === 'preparing') {
+    targetGroup.style.display = '';
+    targetSel.innerHTML = '<option value="">— Select target —</option>' + WIP_PREP_TARGETS.map(p=>`<option value="${p}"${data?.prepared_for===p?' selected':''}>${p}</option>`).join('');
+  } else {
+    targetGroup.style.display = 'none';
+    targetSel.value = '';
+  }
 
   document.getElementById('wip-input').value = data?.input_kg??'';
   document.getElementById('wip-output').value = data?.output_kg??'';
@@ -1949,6 +1968,7 @@ async function saveWip() {
     workstation: document.getElementById('wip-station').value,
     work_date:   document.getElementById('wip-date').value,
     product_name:document.getElementById('wip-product').value,
+    prepared_for:document.getElementById('wip-target').value || null,
     input_kg:    parseFloat(document.getElementById('wip-input').value)||0,
     output_kg:   parseFloat(document.getElementById('wip-output').value)||0,
     wastage_kg:  parseFloat(document.getElementById('wip-wastage').value)||0,
