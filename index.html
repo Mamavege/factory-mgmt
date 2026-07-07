@@ -549,6 +549,13 @@
 
       <!-- WORK ORDERS -->
       <div class="page" id="page-workorders">
+        <div class="card" id="customer-orders-card" style="margin-bottom:16px">
+          <div class="card-header">
+            <div class="card-title" style="margin:0">📋 Pending Customer Orders <span style="font-size:11px;color:var(--text-muted)">(live from Google Sheet · WAREHOUSE STATUS blank)</span></div>
+            <button class="btn btn-secondary btn-sm" style="width:auto" onclick="loadCustomerOrders()"><i class="ti ti-refresh"></i> Refresh</button>
+          </div>
+          <div id="customer-orders-body" style="overflow-x:auto"><div class="loading" style="padding:16px">Loading…</div></div>
+        </div>
         <div class="search-bar">
           <input class="search-input" id="wo-search" placeholder="Search order no. / product name…" oninput="filterWorkOrders()">
           <select class="filter-select" id="wo-status-filter" onchange="filterWorkOrders()">
@@ -1558,6 +1565,7 @@ async function loadWorkOrders() {
   const { data } = await sb.from('work_orders').select('*, assigned:profiles!assigned_to(name)').order('created_at',{ascending:false});
   allWorkOrders = data || [];
   renderWorkOrders(allWorkOrders);
+  loadCustomerOrders();
 }
 function filterWorkOrders() {
   const q = document.getElementById('wo-search').value.toLowerCase();
@@ -1966,6 +1974,115 @@ async function saveTransaction() {
     toast(`${lines.length} item(s) recorded`);
     loadTransactions(); renderProductionChart();
   }
+}
+
+// ─── CUSTOMER ORDERS (Google Sheet → Work Orders) ────
+const CO_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuzV-ypupmY28hZFjdxTB6K5KnoysA_Uiogcwhvr31u7jB1l0sKN5Dih_KhgfmxPyDe_TicjFLYw0E/pub?gid=0&single=true&output=csv';
+// Column positions (0-based) matched from the sheet layout
+const CO_COLS = { invoice:0, month:1, orderDate:2, po:3, customer:4, whStatus:48 };
+const CO_PRODUCTS = [
+  {code:'KPM',  cols:{5:'CTN',6:'PKT',7:'PC'}},
+  {code:'CLM',  cols:{8:'CTN',9:'PKT',10:'PC'}},
+  {code:'SMTS', cols:{11:'CTN',12:'PC'}},
+  {code:'SMCL', cols:{13:'CTN',14:'PC'}},
+  {code:'BBQ',  cols:{15:'CTN(BOX)',16:'CTN(BAG)',17:'BOX',18:'BAG',19:'PC'}},
+  {code:'MALA', cols:{20:'CTN(BOX)',21:'CTN(BAG)',22:'BOX',23:'BAG',24:'PC'}},
+  {code:'SHCR', cols:{25:'CTN',26:'UNIT'}},
+  {code:'SHTY', cols:{27:'CTN',28:'UNIT'}},
+  {code:'TYSN', cols:{29:'CTN',30:'UNIT'}},
+  {code:'TYSP', cols:{31:'CTN',32:'UNIT'}},
+  {code:'TMSP', cols:{33:'CTN',34:'UNIT'}},
+  {code:'SPTS', cols:{35:'CTN',36:'UNIT'}},
+  {code:'SPCL', cols:{37:'CTN',38:'UNIT'}},
+  {code:'POGT', cols:{39:'CTN',40:'PKT'}},
+  {code:'GTSN', cols:{41:'CTN',42:'CUP'}},
+];
+let coPending = [];
+function parseCSV(text) {
+  const rows=[]; let row=[], field='', inQ=false;
+  for (let i=0;i<text.length;i++) {
+    const c=text[i];
+    if (inQ) {
+      if (c==='"') { if (text[i+1]==='"') { field+='"'; i++; } else inQ=false; }
+      else field+=c;
+    } else {
+      if (c==='"') inQ=true;
+      else if (c===',') { row.push(field); field=''; }
+      else if (c==='\n') { row.push(field); rows.push(row); row=[]; field=''; }
+      else if (c!=='\r') field+=c;
+    }
+  }
+  if (field.length||row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+async function loadCustomerOrders() {
+  const body = document.getElementById('customer-orders-body');
+  if (!body) return;
+  body.innerHTML = '<div class="loading" style="padding:16px">Loading from Google Sheet…</div>';
+  let text;
+  try { const res = await fetch(CO_CSV_URL); if (!res.ok) throw new Error('HTTP '+res.status); text = await res.text(); }
+  catch(e) { body.innerHTML = `<div style="padding:16px;color:var(--danger)">Could not load sheet: ${e.message}. Make sure it is still Published to web as CSV.</div>`; return; }
+  const rows = parseCSV(text);
+  const dataRows = rows.filter(r => r.length>CO_COLS.customer && ((r[CO_COLS.invoice]||'').trim() || (r[CO_COLS.po]||'').trim()) && /\d/.test(r[CO_COLS.orderDate]||''));
+  const { data: existing } = await sb.from('work_orders').select('order_no');
+  const existingSet = new Set((existing||[]).map(o=>o.order_no));
+  coPending = [];
+  dataRows.forEach(r => {
+    const wh = (r[CO_COLS.whStatus]||'').trim().toLowerCase();
+    const isPending = wh==='' || wh==='pending';   // blank/pending = still needs production
+    if (!isPending) return;
+    const prods = [];
+    CO_PRODUCTS.forEach(p => {
+      const parts = [];
+      Object.entries(p.cols).forEach(([idx,unit]) => { const v=parseFloat(r[idx]); if (v>0) parts.push(`${v} ${unit}`); });
+      if (parts.length) prods.push(`${p.code}: ${parts.join(', ')}`);
+    });
+    if (!prods.length) return;
+    const invoice = (r[CO_COLS.invoice]||'').trim() || (r[CO_COLS.po]||'').trim();
+    coPending.push({ invoice, po:(r[CO_COLS.po]||'').trim(), date:(r[CO_COLS.orderDate]||'').trim(), customer:(r[CO_COLS.customer]||'').trim(), prods, orderNo:'CO-'+invoice });
+  });
+  renderCustomerOrders(existingSet);
+}
+function renderCustomerOrders(existingSet) {
+  const body = document.getElementById('customer-orders-body');
+  if (!coPending.length) { body.innerHTML = '<div class="empty-state" style="padding:24px"><i class="ti ti-checks"></i><p>No pending customer orders 🎉</p></div>'; return; }
+  const isAdmin = currentProfile?.role==='admin';
+  body.innerHTML = `<table style="width:100%;min-width:640px"><thead><tr style="background:var(--bg)">
+    <th style="padding:8px 12px;font-size:11px;text-align:left">Invoice / PO</th>
+    <th style="padding:8px 12px;font-size:11px;text-align:left">Date</th>
+    <th style="padding:8px 12px;font-size:11px;text-align:left">Customer</th>
+    <th style="padding:8px 12px;font-size:11px;text-align:left">Products</th>
+    <th style="padding:8px 12px;font-size:11px;text-align:right">Action</th>
+  </tr></thead><tbody>
+  ${coPending.map((o,i)=>{
+    const done = existingSet.has(o.orderNo);
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px 12px;font-size:12px"><strong>${o.invoice||'—'}</strong>${o.po&&o.po!==o.invoice?`<br><small style="color:var(--text-muted)">${o.po}</small>`:''}</td>
+      <td style="padding:8px 12px;font-size:12px">${o.date||'—'}</td>
+      <td style="padding:8px 12px;font-size:12px">${o.customer||'—'}</td>
+      <td style="padding:8px 12px;font-size:12px">${o.prods.map(p=>`<span style="display:inline-block;background:var(--bg);border-radius:4px;padding:1px 6px;margin:1px;font-size:11px">${p}</span>`).join('')}</td>
+      <td style="padding:8px 12px;text-align:right">${done
+        ? '<span class="badge badge-success">✓ WO created</span>'
+        : (isAdmin?`<button class="btn btn-primary btn-sm" style="width:auto" onclick="createWOFromCO(${i})"><i class="ti ti-plus"></i> Create WO</button>`:'<span style="font-size:11px;color:var(--text-muted)">pending</span>')}</td>
+    </tr>`;
+  }).join('')}
+  </tbody></table>`;
+}
+async function createWOFromCO(i) {
+  const o = coPending[i]; if (!o) return;
+  const payload = {
+    order_no: o.orderNo,
+    product_name: o.customer + ' — ' + o.prods.join('; '),
+    quantity: 0,
+    status: 'pending',
+    notes: `From customer order sheet\nCustomer: ${o.customer}\nPO: ${o.po||'-'}\nOrder date: ${o.date}\nItems:\n${o.prods.join('\n')}`,
+    created_by: currentUser.id,
+  };
+  const { error } = await sb.from('work_orders').insert(payload);
+  if (error) return toast('Create failed: '+error.message,'error');
+  toast('Work order created for '+o.invoice);
+  loadCustomerOrders();
+  loadWorkOrders();
 }
 
 // ─── WIP MONITORING ─────────────────────────────────
