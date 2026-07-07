@@ -926,7 +926,7 @@
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label>Output (kg)</label>
+        <label id="wip-output-label">Output (kg)</label>
         <input type="number" id="wip-output" placeholder="0" min="0" step="0.01" oninput="calcWipYield()">
       </div>
       <div class="form-group">
@@ -940,7 +940,7 @@
         <input type="number" id="wip-wastage" placeholder="0" min="0" step="0.01">
       </div>
       <div class="form-group">
-        <label>Reject (kg)</label>
+        <label id="wip-reject-label">Reject (kg)</label>
         <input type="number" id="wip-reject" placeholder="0" min="0" step="0.01">
       </div>
     </div>
@@ -1832,6 +1832,8 @@ const WIP_PRODUCTS = {
 };
 // Target WIP/FG that raw material is being prepared for (used by Preparing station for costing)
 const WIP_PREP_TARGETS = [...new Set([...WIP_PRODUCTS.cooking, ...WIP_PRODUCTS.filling])];
+// Output/reject unit per station
+const WIP_UNITS = { preparing:'kg', cooking:'kg', filling:'pack' };
 let allWip = [];
 async function loadWip() {
   const { data, error } = await sb.from('wip_entries')
@@ -1847,8 +1849,9 @@ function renderWipStations() {
   grid.innerHTML = WIP_STATIONS.map(st => {
     const entries = allWip.filter(e=>e.workstation===st.id);
     const todayEntries = entries.filter(e=>e.work_date===new Date().toISOString().slice(0,10));
-    const showYield = st.id !== 'cooking';           // cooking: no input/yield/wastage
+    const showYield = st.id === 'preparing';         // only preparing tracks kg input/yield/wastage
     const hasBatch  = st.id === 'cooking' || st.id === 'filling';
+    const unit = WIP_UNITS[st.id] || 'kg';
     const totalInput  = todayEntries.reduce((s,e)=>s+(parseFloat(e.input_kg)||0),0);
     const totalOutput = todayEntries.reduce((s,e)=>s+(parseFloat(e.output_kg)||0),0);
     const totalWaste  = todayEntries.reduce((s,e)=>s+(parseFloat(e.wastage_kg)||0),0);
@@ -1858,11 +1861,11 @@ function renderWipStations() {
     const tile = (v,l,c)=>`<div style="text-align:center"><div style="font-size:16px;font-weight:800;color:${c}">${v}</div><div style="font-size:10px;color:var(--text-muted)">${l}</div></div>`;
     const tiles = [];
     if (showYield) tiles.push(tile(totalInput.toFixed(1),'Input (kg)','var(--text)'));
-    tiles.push(tile(totalOutput.toFixed(1),'Output (kg)',st.color));
+    tiles.push(tile(totalOutput.toFixed(1),`Output (${unit})`,st.color));
     if (showYield) tiles.push(tile(yieldRate,'Yield','var(--success)'));
-    if (!showYield) tiles.push(tile(batchesToday,'Batches','var(--info)'));
+    if (hasBatch) tiles.push(tile(batchesToday,'Batches','var(--info)'));
     if (showYield) tiles.push(tile(totalWaste.toFixed(1),'Wastage (kg)','var(--warning)'));
-    tiles.push(tile(totalReject.toFixed(1),'Reject (kg)','var(--danger)'));
+    tiles.push(tile(totalReject.toFixed(1),`Reject (${unit})`,'var(--danger)'));
     const th = (t,a='right')=>`<th style="padding:7px 12px;font-size:11px;text-align:${a}">${t}</th>`;
     const td = (v,extra='')=>`<td style="padding:7px 12px;font-size:12px;text-align:right;${extra}">${v}</td>`;
     return `<div class="card">
@@ -1889,10 +1892,10 @@ function renderWipStations() {
           ${th('Product','left')}
           ${hasBatch?th('Batch','left'):''}
           ${showYield?th('Input'):''}
-          ${th('Output')}
+          ${th(`Output (${unit})`)}
           ${showYield?th('Yield'):''}
           ${showYield?th('Waste'):''}
-          ${th('Reject')}
+          ${th(`Reject (${unit})`)}
           ${!showYield?th('Min'):''}
           <th style="padding:7px 12px;font-size:11px"></th>
         </tr></thead><tbody>
@@ -1946,10 +1949,15 @@ function openWipModal(station, data=null) {
   document.getElementById('wip-batch-group').style.display = hasBatch ? '' : 'none';
   document.getElementById('wip-batch').value = data?.batch_no || '';
 
-  // Input / Yield / Wastage — hidden for cooking
-  const showYield = station !== 'cooking';
+  // Input / Yield / Wastage — only for preparing (kg tracking)
+  const showYield = station === 'preparing';
   document.getElementById('wip-row-input').style.display = showYield ? '' : 'none';
   document.getElementById('wip-wastage-group').style.display = showYield ? '' : 'none';
+
+  // Output / Reject unit label per station (filling = pack)
+  const unit = WIP_UNITS[station] || 'kg';
+  document.getElementById('wip-output-label').textContent = `Output (${unit})`;
+  document.getElementById('wip-reject-label').textContent = `Reject (${unit})`;
 
   document.getElementById('wip-input').value = data?.input_kg??'';
   document.getElementById('wip-output').value = data?.output_kg??'';
