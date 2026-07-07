@@ -931,7 +931,17 @@
       </div>
       <div class="form-group">
         <label>Duration (min)</label>
-        <input type="number" id="wip-duration" placeholder="0" min="0">
+        <input type="number" id="wip-duration" placeholder="0" min="0" oninput="calcWipYield()">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Headcount (pax)</label>
+        <input type="number" id="wip-headcount" placeholder="0" min="0" oninput="calcWipYield()">
+      </div>
+      <div class="form-group">
+        <label>Labor Efficiency (auto)</label>
+        <input type="text" id="wip-labor" disabled style="opacity:0.8;font-weight:700;color:var(--info)" placeholder="—">
       </div>
     </div>
     <div class="form-row">
@@ -1858,6 +1868,8 @@ function renderWipStations() {
     const totalReject = todayEntries.reduce((s,e)=>s+(parseFloat(e.reject_qty)||0),0);
     const yieldRate   = totalInput>0 ? (totalOutput/totalInput*100).toFixed(1)+'%' : '—';
     const batchesToday = new Set(todayEntries.map(e=>e.batch_no).filter(Boolean)).size;
+    const manHours    = todayEntries.reduce((s,e)=>s+((parseFloat(e.headcount)||0)*((parseFloat(e.duration_min)||0)/60)),0);
+    const laborEff    = manHours>0 ? (totalOutput/manHours).toFixed(1) : '—';
     const tile = (v,l,c)=>`<div style="text-align:center"><div style="font-size:16px;font-weight:800;color:${c}">${v}</div><div style="font-size:10px;color:var(--text-muted)">${l}</div></div>`;
     const tiles = [];
     if (showYield) tiles.push(tile(totalInput.toFixed(1),'Input (kg)','var(--text)'));
@@ -1866,6 +1878,7 @@ function renderWipStations() {
     if (hasBatch) tiles.push(tile(batchesToday,'Batches','var(--info)'));
     if (showYield) tiles.push(tile(totalWaste.toFixed(1),'Wastage (kg)','var(--warning)'));
     tiles.push(tile(totalReject.toFixed(1),`Reject (${unit})`,'var(--danger)'));
+    tiles.push(tile(laborEff,`Eff (${unit}/mh)`,'var(--info)'));
     const th = (t,a='right')=>`<th style="padding:7px 12px;font-size:11px;text-align:${a}">${t}</th>`;
     const td = (v,extra='')=>`<td style="padding:7px 12px;font-size:12px;text-align:right;${extra}">${v}</td>`;
     return `<div class="card">
@@ -1897,6 +1910,7 @@ function renderWipStations() {
           ${showYield?th('Waste'):''}
           ${th(`Reject (${unit})`)}
           ${!showYield?th('Min'):''}
+          ${th('Pax')}
           <th style="padding:7px 12px;font-size:11px"></th>
         </tr></thead><tbody>
           ${entries.slice(0,10).map(e=>{
@@ -1912,6 +1926,7 @@ function renderWipStations() {
             ${showYield?td(e.wastage_kg??'—','color:var(--warning)'):''}
             ${td(e.reject_qty??'—','color:var(--danger)')}
             ${!showYield?td(e.duration_min??'—','color:var(--text-muted)'):''}
+            ${td(e.headcount??'—','color:var(--text-muted)')}
             <td style="padding:7px 12px;text-align:right;white-space:nowrap">
               <button class="btn btn-secondary btn-sm" onclick="editWip('${e.id}')"><i class="ti ti-edit"></i></button>
               <button class="btn btn-danger btn-sm" onclick="deleteWip('${e.id}')"><i class="ti ti-trash"></i></button>
@@ -1962,6 +1977,7 @@ function openWipModal(station, data=null) {
   document.getElementById('wip-input').value = data?.input_kg??'';
   document.getElementById('wip-output').value = data?.output_kg??'';
   document.getElementById('wip-duration').value = data?.duration_min??'';
+  document.getElementById('wip-headcount').value = data?.headcount??'';
   document.getElementById('wip-wastage').value = data?.wastage_kg??'';
   document.getElementById('wip-reject').value = data?.reject_qty??'';
   document.getElementById('wip-notes').value = data?.notes||'';
@@ -1972,6 +1988,11 @@ function calcWipYield() {
   const inp = parseFloat(document.getElementById('wip-input').value)||0;
   const out = parseFloat(document.getElementById('wip-output').value)||0;
   document.getElementById('wip-yield').value = inp>0 ? (out/inp*100).toFixed(1)+'%' : '—';
+  const dur = parseFloat(document.getElementById('wip-duration').value)||0;
+  const hc  = parseFloat(document.getElementById('wip-headcount').value)||0;
+  const manHours = hc * (dur/60);
+  const unit = WIP_UNITS[document.getElementById('wip-station').value] || 'kg';
+  document.getElementById('wip-labor').value = manHours>0 ? (out/manHours).toFixed(1)+` ${unit}/man-hr` : '—';
 }
 function editWip(id) {
   const e = allWip.find(x=>x.id===id);
@@ -1995,6 +2016,7 @@ async function saveWip() {
     wastage_kg:  parseFloat(document.getElementById('wip-wastage').value)||0,
     reject_qty:  parseFloat(document.getElementById('wip-reject').value)||0,
     duration_min:parseInt(document.getElementById('wip-duration').value)||null,
+    headcount:   parseInt(document.getElementById('wip-headcount').value)||null,
     notes:       document.getElementById('wip-notes').value,
     created_by:  currentUser.id,
   };
