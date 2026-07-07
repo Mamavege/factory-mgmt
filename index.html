@@ -1978,17 +1978,16 @@ function renderWipStations() {
   if (!grid) return;
   grid.innerHTML = WIP_STATIONS.map(st => {
     const entries = allWip.filter(e=>e.workstation===st.id);
-    const todayEntries = entries.filter(e=>e.work_date===new Date().toISOString().slice(0,10));
     const showYield = st.id === 'preparing';         // only preparing tracks kg input/yield/wastage
     const hasBatch  = st.id === 'cooking' || st.id === 'filling';
     const unit = WIP_UNITS[st.id] || 'kg';
-    const totalInput  = todayEntries.reduce((s,e)=>s+(parseFloat(e.input_kg)||0),0);
-    const totalOutput = todayEntries.reduce((s,e)=>s+(parseFloat(e.output_kg)||0),0);
-    const totalWaste  = todayEntries.reduce((s,e)=>s+(parseFloat(e.wastage_kg)||0),0);
-    const totalReject = todayEntries.reduce((s,e)=>s+(parseFloat(e.reject_qty)||0),0);
+    const totalInput  = entries.reduce((s,e)=>s+(parseFloat(e.input_kg)||0),0);
+    const totalOutput = entries.reduce((s,e)=>s+(parseFloat(e.output_kg)||0),0);
+    const totalWaste  = entries.reduce((s,e)=>s+(parseFloat(e.wastage_kg)||0),0);
+    const totalReject = entries.reduce((s,e)=>s+(parseFloat(e.reject_qty)||0),0);
     const yieldRate   = totalInput>0 ? (totalOutput/totalInput*100).toFixed(1)+'%' : '—';
-    const batchesToday = new Set(todayEntries.map(e=>e.batch_no).filter(Boolean)).size;
-    const manHours    = todayEntries.reduce((s,e)=>s+((parseFloat(e.headcount)||0)*((parseFloat(e.duration_min)||0)/60)),0);
+    const batchesToday = new Set(entries.map(e=>e.batch_no).filter(Boolean)).size;
+    const manHours    = entries.reduce((s,e)=>s+((parseFloat(e.headcount)||0)*((parseFloat(e.duration_min)||0)/60)),0);
     const laborEff    = manHours>0 ? (totalOutput/manHours).toFixed(1) : '—';
     const tile = (v,l,c)=>`<div style="text-align:center"><div style="font-size:16px;font-weight:800;color:${c}">${v}</div><div style="font-size:10px;color:var(--text-muted)">${l}</div></div>`;
     const tiles = [];
@@ -2009,7 +2008,7 @@ function renderWipStations() {
           </div>
           <div>
             <div class="card-title" style="margin:0">${st.label}</div>
-            <div style="font-size:11px;color:var(--text-muted)">Today: ${todayEntries.length} log(s)</div>
+            <div style="font-size:11px;color:var(--text-muted)">${entries.length} log(s) total</div>
           </div>
         </div>
         <button class="btn btn-primary btn-sm" style="width:auto" onclick="openWipModal('${st.id}')">
