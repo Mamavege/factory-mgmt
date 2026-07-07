@@ -1069,8 +1069,13 @@
         <input type="date" id="plan-date">
       </div>
       <div class="form-group">
-        <label>Plan Title</label>
-        <input type="text" id="plan-title" placeholder="e.g. Production Run A">
+        <label>Plan Type</label>
+        <select id="plan-title">
+          <option value="Prepare">Prepare</option>
+          <option value="Cook">Cook</option>
+          <option value="Fill">Fill</option>
+          <option value="Pack">Pack</option>
+        </select>
       </div>
     </div>
     <div class="form-row">
@@ -2407,6 +2412,7 @@ function appendAIMsg(role, text) {
 
 // ─── PRODUCTION CALENDAR ────────────────────────────
 let calYear, calMonth, calPlans = [], calSelectedDate = null;
+const PLAN_TYPES = { Prepare:'#6c63ff', Cook:'#f97316', Fill:'#43c6a8', Pack:'#3b82f6' };
 
 function initCalendar() {
   const now = new Date();
@@ -2466,7 +2472,9 @@ function renderCalendar() {
     html += `<div class="${cls}" onclick="selectCalDay('${dateStr}')">
       <div class="cal-day-num">${d}</div>`;
     plans.slice(0,2).forEach(p => {
-      html += `<span class="cal-plan-dot">${p.title}</span>`;
+      const color = PLAN_TYPES[p.title] || 'var(--accent)';
+      const label = p.title + (p.product_name ? ': ' + p.product_name : '');
+      html += `<span class="cal-plan-dot" style="background:${color}22;color:${color}">${label}</span>`;
     });
     if (plans.length > 2) {
       html += `<span class="cal-plan-dot more">+${plans.length-2} more</span>`;
@@ -2499,8 +2507,8 @@ function selectCalDay(dateStr) {
     document.getElementById('cal-detail-list').innerHTML = plans.map(p => `
       <div class="plan-item">
         <div class="plan-item-info">
-          <div class="plan-item-title">${p.title}</div>
-          <div class="plan-item-sub">${p.product_name ? `${p.product_name}` : ''}${p.quantity ? ` · Target: ${p.quantity}` : ''}${p.notes ? ` · ${p.notes}` : ''}</div>
+          <div class="plan-item-title" style="color:${PLAN_TYPES[p.title]||'var(--text)'}">${p.title}${p.product_name ? ': ' + p.product_name : ''}</div>
+          <div class="plan-item-sub">${p.quantity ? `Target: ${p.quantity}` : ''}${p.notes ? `${p.quantity?' · ':''}${p.notes}` : ''}</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0;margin-left:12px;">
           <button class="btn btn-secondary btn-sm" onclick="editPlan('${p.id}')"><i class="ti ti-edit"></i></button>
@@ -2518,7 +2526,7 @@ function openPlanModal(date=null) {
   document.getElementById('modal-plan-title').textContent = 'Add Production Plan';
   document.getElementById('plan-id').value = '';
   document.getElementById('plan-date').value = date || new Date().toISOString().slice(0,10);
-  document.getElementById('plan-title').value = '';
+  document.getElementById('plan-title').value = 'Prepare';
   document.getElementById('plan-product').value = '';
   document.getElementById('plan-qty').value = '';
   document.getElementById('plan-notes').value = '';
