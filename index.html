@@ -1877,7 +1877,7 @@ function renderWipStations() {
     if (showYield) tiles.push(tile(yieldRate,'Yield','var(--success)'));
     if (hasBatch) tiles.push(tile(batchesToday,'Batches','var(--info)'));
     if (showYield) tiles.push(tile(totalWaste.toFixed(1),'Wastage (kg)','var(--warning)'));
-    tiles.push(tile(totalReject.toFixed(1),`Reject (${unit})`,'var(--danger)'));
+    tiles.push(tile(totalReject.toFixed(1),'Reject (kg)','var(--danger)'));
     tiles.push(tile(laborEff,`Eff (${unit}/mh)`,'var(--info)'));
     const th = (t,a='right')=>`<th style="padding:7px 12px;font-size:11px;text-align:${a}">${t}</th>`;
     const td = (v,extra='')=>`<td style="padding:7px 12px;font-size:12px;text-align:right;${extra}">${v}</td>`;
@@ -1908,7 +1908,7 @@ function renderWipStations() {
           ${th(`Output (${unit})`)}
           ${showYield?th('Yield'):''}
           ${showYield?th('Waste'):''}
-          ${th(`Reject (${unit})`)}
+          ${th('Reject (kg)')}
           ${!showYield?th('Min'):''}
           ${th('Pax')}
           <th style="padding:7px 12px;font-size:11px"></th>
@@ -1972,7 +1972,7 @@ function openWipModal(station, data=null) {
   // Output / Reject unit label per station (filling = pack)
   const unit = WIP_UNITS[station] || 'kg';
   document.getElementById('wip-output-label').textContent = `Output (${unit})`;
-  document.getElementById('wip-reject-label').textContent = `Reject (${unit})`;
+  document.getElementById('wip-reject-label').textContent = 'Reject (kg)';
 
   document.getElementById('wip-input').value = data?.input_kg??'';
   document.getElementById('wip-output').value = data?.output_kg??'';
