@@ -623,6 +623,16 @@
 
       <!-- WIP MONITORING -->
       <div class="page" id="page-wip">
+        <div class="card" style="margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;flex-wrap:wrap">
+            <span style="font-size:12px;font-weight:600;color:var(--text-muted)">Show totals for:</span>
+            <label style="font-size:12px">From <input type="date" id="wip-from" onchange="renderWipStations()" style="padding:4px 8px"></label>
+            <label style="font-size:12px">To <input type="date" id="wip-to" onchange="renderWipStations()" style="padding:4px 8px"></label>
+            <button class="btn btn-secondary btn-sm" style="width:auto" onclick="wipDatePreset('today')">Today</button>
+            <button class="btn btn-secondary btn-sm" style="width:auto" onclick="wipDatePreset('month')">This Month</button>
+            <button class="btn btn-secondary btn-sm" style="width:auto" onclick="wipDatePreset('all')">All</button>
+          </div>
+        </div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px" id="wip-stations-grid">
           <!-- rendered by JS -->
         </div>
@@ -2109,22 +2119,33 @@ async function loadWip() {
   else allWip = data || [];
   renderWipStations();
 }
+function wipDatePreset(preset) {
+  const now = new Date();
+  const iso = d => d.toISOString().slice(0,10);
+  const fromEl = document.getElementById('wip-from'), toEl = document.getElementById('wip-to');
+  if (preset==='today') { const t=iso(now); fromEl.value=t; toEl.value=t; }
+  else if (preset==='month') { fromEl.value=iso(new Date(now.getFullYear(),now.getMonth(),1)); toEl.value=iso(new Date(now.getFullYear(),now.getMonth()+1,0)); }
+  else { fromEl.value=''; toEl.value=''; }
+  renderWipStations();
+}
 function renderWipStations() {
   const grid = document.getElementById('wip-stations-grid');
   if (!grid) return;
+  const from = document.getElementById('wip-from')?.value || '';
+  const to   = document.getElementById('wip-to')?.value || '';
+  const inRange = e => (!from || (e.work_date||'') >= from) && (!to || (e.work_date||'') <= to);
   grid.innerHTML = WIP_STATIONS.map(st => {
-    const entries = allWip.filter(e=>e.workstation===st.id);
-    const todayEntries = entries.filter(e=>e.work_date===new Date().toISOString().slice(0,10));
+    const entries = allWip.filter(e=>e.workstation===st.id && inRange(e));
     const showYield = st.id === 'preparing';         // only preparing tracks kg input/yield/wastage
     const hasBatch  = st.id === 'cooking' || st.id === 'filling';
     const unit = WIP_UNITS[st.id] || 'kg';
-    const totalInput  = todayEntries.reduce((s,e)=>s+(parseFloat(e.input_kg)||0),0);
-    const totalOutput = todayEntries.reduce((s,e)=>s+(parseFloat(e.output_kg)||0),0);
-    const totalWaste  = todayEntries.reduce((s,e)=>s+(parseFloat(e.wastage_kg)||0),0);
-    const totalReject = todayEntries.reduce((s,e)=>s+(parseFloat(e.reject_qty)||0),0);
+    const totalInput  = entries.reduce((s,e)=>s+(parseFloat(e.input_kg)||0),0);
+    const totalOutput = entries.reduce((s,e)=>s+(parseFloat(e.output_kg)||0),0);
+    const totalWaste  = entries.reduce((s,e)=>s+(parseFloat(e.wastage_kg)||0),0);
+    const totalReject = entries.reduce((s,e)=>s+(parseFloat(e.reject_qty)||0),0);
     const yieldRate   = totalInput>0 ? (totalOutput/totalInput*100).toFixed(1)+'%' : '—';
-    const batchesToday = new Set(todayEntries.map(e=>e.batch_no).filter(Boolean)).size;
-    const manHours    = todayEntries.reduce((s,e)=>s+((parseFloat(e.headcount)||0)*((parseFloat(e.duration_min)||0)/60)),0);
+    const batchesToday = new Set(entries.map(e=>e.batch_no).filter(Boolean)).size;
+    const manHours    = entries.reduce((s,e)=>s+((parseFloat(e.headcount)||0)*((parseFloat(e.duration_min)||0)/60)),0);
     const laborEff    = manHours>0 ? (totalOutput/manHours).toFixed(1) : '—';
     const tile = (v,l,c)=>`<div style="text-align:center"><div style="font-size:16px;font-weight:800;color:${c}">${v}</div><div style="font-size:10px;color:var(--text-muted)">${l}</div></div>`;
     const tiles = [];
@@ -2145,7 +2166,7 @@ function renderWipStations() {
           </div>
           <div>
             <div class="card-title" style="margin:0">${st.label}</div>
-            <div style="font-size:11px;color:var(--text-muted)">Today: ${todayEntries.length} log(s)</div>
+            <div style="font-size:11px;color:var(--text-muted)">${entries.length} log(s) total</div>
           </div>
         </div>
         <button class="btn btn-primary btn-sm" style="width:auto" onclick="openWipModal('${st.id}')">
