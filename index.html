@@ -2705,7 +2705,8 @@ async function savePlan() {
 
 async function deletePlan(id) {
   if (!confirm('Delete this plan?')) return;
-  await sb.from('production_plans').delete().eq('id', id);
+  const { error } = await sb.from('production_plans').delete().eq('id', id);
+  if (error) return toast('Delete failed: '+error.message+' — check RLS on production_plans','error');
   toast('Deleted');
   await loadCalendar();
   if (calSelectedDate) selectCalDay(calSelectedDate);
