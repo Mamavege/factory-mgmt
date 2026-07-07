@@ -2033,13 +2033,31 @@ async function loadCustomerOrders() {
   try { const res = await fetch(CO_CSV_URL); if (!res.ok) throw new Error('HTTP '+res.status); text = await res.text(); }
   catch(e) { body.innerHTML = `<div style="padding:16px;color:var(--danger)">Could not load sheet: ${e.message}. Make sure it is still Published to web as CSV.</div>`; return; }
   const rows = parseCSV(text);
-  const dataRows = rows.filter(r => r.length>CO_COLS.customer && ((r[CO_COLS.invoice]||'').trim() || (r[CO_COLS.po]||'').trim()) && /\d/.test(r[CO_COLS.orderDate]||''));
+  // Auto-detect columns from the header so it stays correct even if the sheet shifts
+  const C = Object.assign({}, CO_COLS);
+  let headerRow = -1;
+  for (let i=0;i<Math.min(rows.length,10);i++) {
+    const up = rows[i].map(c=>(c||'').trim().toUpperCase());
+    const inv = up.indexOf('INVOICE NUMBER');
+    if (inv>=0) {
+      headerRow = i;
+      C.invoice = inv;
+      if (up.indexOf('ORDER DATE')>=0) C.orderDate = up.indexOf('ORDER DATE');
+      if (up.indexOf('PO NUMBER')>=0) C.po = up.indexOf('PO NUMBER');
+      if (up.indexOf('CUSTOMER NAME')>=0) C.customer = up.indexOf('CUSTOMER NAME');
+      // WAREHOUSE STATUS: the 'WAREHOUSE' group label sits in the row above, at the STATUS column
+      if (i>0) { const grp = rows[i-1].map(c=>(c||'').trim().toUpperCase()); if (grp.indexOf('WAREHOUSE')>=0) C.whStatus = grp.indexOf('WAREHOUSE'); }
+      break;
+    }
+  }
+  console.log('[CustomerOrders] detected columns:', C);
+  const dataRows = rows.filter((r,i) => (headerRow<0 || i>headerRow) && r.length>C.customer && ((r[C.invoice]||'').trim() || (r[C.po]||'').trim()) && /\d/.test(r[C.orderDate]||''));
   const { data: existing } = await sb.from('work_orders').select('order_no');
   const existingSet = new Set((existing||[]).map(o=>o.order_no));
   coPending = [];
   dataRows.forEach(r => {
-    const wh = (r[CO_COLS.whStatus]||'').trim().toLowerCase();
-    const isPending = wh==='' || wh==='pending';   // blank/pending = still needs production
+    const wh = (r[C.whStatus]||'').trim().toLowerCase();
+    const isPending = wh==='' || wh==='pending';   // blank = still needs production; PROCEED (or any other) = cleared
     if (!isPending) return;
     const prods = [];
     CO_PRODUCTS.forEach(p => {
@@ -2048,8 +2066,8 @@ async function loadCustomerOrders() {
       if (parts.length) prods.push(`${p.code}: ${parts.join(', ')}`);
     });
     if (!prods.length) return;
-    const invoice = (r[CO_COLS.invoice]||'').trim() || (r[CO_COLS.po]||'').trim();
-    coPending.push({ invoice, po:(r[CO_COLS.po]||'').trim(), date:(r[CO_COLS.orderDate]||'').trim(), customer:(r[CO_COLS.customer]||'').trim(), prods, orderNo:'CO-'+invoice });
+    const invoice = (r[C.invoice]||'').trim() || (r[C.po]||'').trim();
+    coPending.push({ invoice, po:(r[C.po]||'').trim(), date:(r[C.orderDate]||'').trim(), customer:(r[C.customer]||'').trim(), prods, orderNo:'CO-'+invoice });
   });
   renderCustomerOrders(existingSet);
 }
