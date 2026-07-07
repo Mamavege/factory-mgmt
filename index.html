@@ -1076,15 +1076,22 @@
     </div>
     <div class="form-row">
       <div class="form-group">
+        <label>Start Time</label>
+        <input type="time" id="wip-start" oninput="calcWipYield()">
+      </div>
+      <div class="form-group">
+        <label>End Time</label>
+        <input type="time" id="wip-end" oninput="calcWipYield()">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
         <label id="wip-output-label">Output (kg)</label>
         <input type="number" id="wip-output" placeholder="0" min="0" step="0.01" oninput="calcWipYield()">
       </div>
       <div class="form-group">
-        <label>Duration</label>
-        <div style="display:flex;gap:6px">
-          <input type="number" id="wip-dur-hr" placeholder="hr" min="0" oninput="calcWipYield()" style="flex:1">
-          <input type="number" id="wip-dur-min" placeholder="min" min="0" max="59" oninput="calcWipYield()" style="flex:1">
-        </div>
+        <label>Duration (auto)</label>
+        <input type="text" id="wip-dur-display" disabled style="opacity:0.8;font-weight:700" placeholder="—">
       </div>
     </div>
     <div class="form-row">
@@ -2275,9 +2282,8 @@ function openWipModal(station, data=null) {
 
   document.getElementById('wip-input').value = data?.input_kg??'';
   document.getElementById('wip-output').value = data?.output_kg??'';
-  const dm = data?.duration_min||0;
-  document.getElementById('wip-dur-hr').value = dm ? Math.floor(dm/60) : '';
-  document.getElementById('wip-dur-min').value = dm ? dm%60 : '';
+  document.getElementById('wip-start').value = data?.start_time || '';
+  document.getElementById('wip-end').value = data?.end_time || '';
   document.getElementById('wip-headcount').value = data?.headcount??'';
   document.getElementById('wip-wastage').value = data?.wastage_kg??'';
   document.getElementById('wip-reject').value = data?.reject_qty??'';
@@ -2286,9 +2292,14 @@ function openWipModal(station, data=null) {
   openModal('modal-wip');
 }
 function wipDurationMin() {
-  const h = parseInt(document.getElementById('wip-dur-hr').value)||0;
-  const m = parseInt(document.getElementById('wip-dur-min').value)||0;
-  return h*60 + m;
+  const s = document.getElementById('wip-start').value;
+  const e = document.getElementById('wip-end').value;
+  if (!s || !e) return 0;
+  const [sh,sm] = s.split(':').map(Number);
+  const [eh,em] = e.split(':').map(Number);
+  let d = (eh*60+em) - (sh*60+sm);
+  if (d < 0) d += 24*60;   // crosses midnight
+  return d;
 }
 function fmtHM(mins) {
   mins = parseInt(mins)||0;
@@ -2301,6 +2312,7 @@ function calcWipYield() {
   const out = parseFloat(document.getElementById('wip-output').value)||0;
   document.getElementById('wip-yield').value = inp>0 ? (out/inp*100).toFixed(1)+'%' : '—';
   const dur = wipDurationMin();
+  document.getElementById('wip-dur-display').value = dur>0 ? fmtHM(dur) : '—';
   const hc  = parseFloat(document.getElementById('wip-headcount').value)||0;
   const manHours = hc * (dur/60);
   const unit = WIP_UNITS[document.getElementById('wip-station').value] || 'kg';
@@ -2327,6 +2339,8 @@ async function saveWip() {
     output_kg:   parseFloat(document.getElementById('wip-output').value)||0,
     wastage_kg:  parseFloat(document.getElementById('wip-wastage').value)||0,
     reject_qty:  parseFloat(document.getElementById('wip-reject').value)||0,
+    start_time:  document.getElementById('wip-start').value || null,
+    end_time:    document.getElementById('wip-end').value || null,
     duration_min:wipDurationMin()||null,
     headcount:   parseInt(document.getElementById('wip-headcount').value)||null,
     notes:       document.getElementById('wip-notes').value,
