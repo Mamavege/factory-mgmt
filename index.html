@@ -910,7 +910,11 @@
         <option value="">— Select target —</option>
       </select>
     </div>
-    <div class="form-row">
+    <div class="form-group" id="wip-batch-group" style="display:none">
+      <label>Batch No.</label>
+      <input type="text" id="wip-batch" placeholder="e.g. B-20260707-01">
+    </div>
+    <div class="form-row" id="wip-row-input">
       <div class="form-group">
         <label>Raw Material Input (kg)</label>
         <input type="number" id="wip-input" placeholder="0" min="0" step="0.01" oninput="calcWipYield()">
@@ -931,7 +935,7 @@
       </div>
     </div>
     <div class="form-row">
-      <div class="form-group">
+      <div class="form-group" id="wip-wastage-group">
         <label>Wastage (kg)</label>
         <input type="number" id="wip-wastage" placeholder="0" min="0" step="0.01">
       </div>
@@ -1843,11 +1847,24 @@ function renderWipStations() {
   grid.innerHTML = WIP_STATIONS.map(st => {
     const entries = allWip.filter(e=>e.workstation===st.id);
     const todayEntries = entries.filter(e=>e.work_date===new Date().toISOString().slice(0,10));
+    const showYield = st.id !== 'cooking';           // cooking: no input/yield/wastage
+    const hasBatch  = st.id === 'cooking' || st.id === 'filling';
     const totalInput  = todayEntries.reduce((s,e)=>s+(parseFloat(e.input_kg)||0),0);
     const totalOutput = todayEntries.reduce((s,e)=>s+(parseFloat(e.output_kg)||0),0);
     const totalWaste  = todayEntries.reduce((s,e)=>s+(parseFloat(e.wastage_kg)||0),0);
     const totalReject = todayEntries.reduce((s,e)=>s+(parseFloat(e.reject_qty)||0),0);
     const yieldRate   = totalInput>0 ? (totalOutput/totalInput*100).toFixed(1)+'%' : '—';
+    const batchesToday = new Set(todayEntries.map(e=>e.batch_no).filter(Boolean)).size;
+    const tile = (v,l,c)=>`<div style="text-align:center"><div style="font-size:16px;font-weight:800;color:${c}">${v}</div><div style="font-size:10px;color:var(--text-muted)">${l}</div></div>`;
+    const tiles = [];
+    if (showYield) tiles.push(tile(totalInput.toFixed(1),'Input (kg)','var(--text)'));
+    tiles.push(tile(totalOutput.toFixed(1),'Output (kg)',st.color));
+    if (showYield) tiles.push(tile(yieldRate,'Yield','var(--success)'));
+    if (!showYield) tiles.push(tile(batchesToday,'Batches','var(--info)'));
+    if (showYield) tiles.push(tile(totalWaste.toFixed(1),'Wastage (kg)','var(--warning)'));
+    tiles.push(tile(totalReject.toFixed(1),'Reject (kg)','var(--danger)'));
+    const th = (t,a='right')=>`<th style="padding:7px 12px;font-size:11px;text-align:${a}">${t}</th>`;
+    const td = (v,extra='')=>`<td style="padding:7px 12px;font-size:12px;text-align:right;${extra}">${v}</td>`;
     return `<div class="card">
       <div class="card-header">
         <div style="display:flex;align-items:center;gap:10px">
@@ -1863,37 +1880,20 @@ function renderWipStations() {
           <i class="ti ti-plus"></i> Log
         </button>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:12px 16px;border-bottom:1px solid var(--border)">
-        <div style="text-align:center">
-          <div style="font-size:16px;font-weight:800;color:var(--text)">${totalInput.toFixed(1)}</div>
-          <div style="font-size:10px;color:var(--text-muted)">Input (kg)</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:16px;font-weight:800;color:${st.color}">${totalOutput.toFixed(1)}</div>
-          <div style="font-size:10px;color:var(--text-muted)">Output (kg)</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:16px;font-weight:800;color:var(--success)">${yieldRate}</div>
-          <div style="font-size:10px;color:var(--text-muted)">Yield</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:16px;font-weight:800;color:var(--warning)">${totalWaste.toFixed(1)}</div>
-          <div style="font-size:10px;color:var(--text-muted)">Wastage (kg)</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:16px;font-weight:800;color:var(--danger)">${totalReject.toFixed(1)}</div>
-          <div style="font-size:10px;color:var(--text-muted)">Reject (kg)</div>
-        </div>
+      <div style="display:grid;grid-template-columns:repeat(${tiles.length},1fr);gap:6px;padding:12px 16px;border-bottom:1px solid var(--border)">
+        ${tiles.join('')}
       </div>
       <div style="max-height:220px;overflow:auto">
         ${entries.length ? `<table style="width:100%;min-width:520px"><thead><tr style="background:var(--bg)">
-          <th style="padding:7px 12px;font-size:11px;text-align:left">Date</th>
-          <th style="padding:7px 12px;font-size:11px;text-align:left">Product</th>
-          <th style="padding:7px 12px;font-size:11px;text-align:right">Input</th>
-          <th style="padding:7px 12px;font-size:11px;text-align:right">Output</th>
-          <th style="padding:7px 12px;font-size:11px;text-align:right">Yield</th>
-          <th style="padding:7px 12px;font-size:11px;text-align:right">Waste</th>
-          <th style="padding:7px 12px;font-size:11px;text-align:right">Reject</th>
+          ${th('Date','left')}
+          ${th('Product','left')}
+          ${hasBatch?th('Batch','left'):''}
+          ${showYield?th('Input'):''}
+          ${th('Output')}
+          ${showYield?th('Yield'):''}
+          ${showYield?th('Waste'):''}
+          ${th('Reject')}
+          ${!showYield?th('Min'):''}
           <th style="padding:7px 12px;font-size:11px"></th>
         </tr></thead><tbody>
           ${entries.slice(0,10).map(e=>{
@@ -1902,12 +1902,14 @@ function renderWipStations() {
             return `<tr style="border-bottom:1px solid var(--border)">
             <td style="padding:7px 12px;font-size:12px">${e.work_date||'—'}</td>
             <td style="padding:7px 12px;font-size:12px">${e.product_name||'—'}${e.prepared_for?`<br><small style="color:var(--text-muted)">→ ${e.prepared_for}</small>`:''}</td>
-            <td style="padding:7px 12px;font-size:12px;text-align:right">${e.input_kg??'—'}</td>
-            <td style="padding:7px 12px;font-size:12px;text-align:right;font-weight:600">${e.output_kg??'—'}</td>
-            <td style="padding:7px 12px;font-size:12px;text-align:right;color:var(--success);font-weight:600">${yld}</td>
-            <td style="padding:7px 12px;font-size:12px;text-align:right;color:var(--warning)">${e.wastage_kg??'—'}</td>
-            <td style="padding:7px 12px;font-size:12px;text-align:right;color:var(--danger)">${e.reject_qty??'—'}</td>
-            <td style="padding:7px 12px;text-align:right">
+            ${hasBatch?`<td style="padding:7px 12px;font-size:12px">${e.batch_no||'—'}</td>`:''}
+            ${showYield?td(e.input_kg??'—'):''}
+            ${td(e.output_kg??'—','font-weight:600')}
+            ${showYield?td(yld,'color:var(--success);font-weight:600'):''}
+            ${showYield?td(e.wastage_kg??'—','color:var(--warning)'):''}
+            ${td(e.reject_qty??'—','color:var(--danger)')}
+            ${!showYield?td(e.duration_min??'—','color:var(--text-muted)'):''}
+            <td style="padding:7px 12px;text-align:right;white-space:nowrap">
               <button class="btn btn-secondary btn-sm" onclick="editWip('${e.id}')"><i class="ti ti-edit"></i></button>
               <button class="btn btn-danger btn-sm" onclick="deleteWip('${e.id}')"><i class="ti ti-trash"></i></button>
             </td>
@@ -1939,6 +1941,16 @@ function openWipModal(station, data=null) {
     targetSel.value = '';
   }
 
+  // Batch — cooking & filling only
+  const hasBatch = station === 'cooking' || station === 'filling';
+  document.getElementById('wip-batch-group').style.display = hasBatch ? '' : 'none';
+  document.getElementById('wip-batch').value = data?.batch_no || '';
+
+  // Input / Yield / Wastage — hidden for cooking
+  const showYield = station !== 'cooking';
+  document.getElementById('wip-row-input').style.display = showYield ? '' : 'none';
+  document.getElementById('wip-wastage-group').style.display = showYield ? '' : 'none';
+
   document.getElementById('wip-input').value = data?.input_kg??'';
   document.getElementById('wip-output').value = data?.output_kg??'';
   document.getElementById('wip-duration').value = data?.duration_min??'';
@@ -1969,6 +1981,7 @@ async function saveWip() {
     work_date:   document.getElementById('wip-date').value,
     product_name:document.getElementById('wip-product').value,
     prepared_for:document.getElementById('wip-target').value || null,
+    batch_no:    document.getElementById('wip-batch').value || null,
     input_kg:    parseFloat(document.getElementById('wip-input').value)||0,
     output_kg:   parseFloat(document.getElementById('wip-output').value)||0,
     wastage_kg:  parseFloat(document.getElementById('wip-wastage').value)||0,
