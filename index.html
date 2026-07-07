@@ -551,7 +551,7 @@
       <div class="page" id="page-workorders">
         <div class="card" id="customer-orders-card" style="margin-bottom:16px">
           <div class="card-header">
-            <div class="card-title" style="margin:0">📋 Pending Customer Orders <span style="font-size:11px;color:var(--text-muted)">(live from Google Sheet · WAREHOUSE STATUS blank)</span></div>
+            <div class="card-title" style="margin:0">📋 Pending Customer Orders <span style="font-size:11px;color:var(--text-muted)">(live from Google Sheet · blank invoice = pending)</span></div>
             <button class="btn btn-secondary btn-sm" style="width:auto" onclick="loadCustomerOrders()"><i class="ti ti-refresh"></i> Refresh</button>
           </div>
           <div id="customer-orders-body" style="overflow-x:auto"><div class="loading" style="padding:16px">Loading…</div></div>
@@ -2051,14 +2051,13 @@ async function loadCustomerOrders() {
     }
   }
   console.log('[CustomerOrders] detected columns:', C);
-  const dataRows = rows.filter((r,i) => (headerRow<0 || i>headerRow) && r.length>C.customer && ((r[C.invoice]||'').trim() || (r[C.po]||'').trim()) && /\d/.test(r[C.orderDate]||''));
+  const dataRows = rows.filter((r,i) => (headerRow<0 || i>headerRow) && r.length>C.customer && (r[C.customer]||'').trim() && /\d/.test(r[C.orderDate]||''));
   const { data: existing } = await sb.from('work_orders').select('order_no');
   const existingSet = new Set((existing||[]).map(o=>o.order_no));
   coPending = [];
   dataRows.forEach(r => {
-    const wh = (r[C.whStatus]||'').trim().toLowerCase();
-    const isPending = wh==='' || wh==='pending';   // blank = still needs production; PROCEED (or any other) = cleared
-    if (!isPending) return;
+    const invoice = (r[C.invoice]||'').trim();
+    if (invoice) return;   // has invoice = warehouse already cleared/invoiced → not pending
     const prods = [];
     CO_PRODUCTS.forEach(p => {
       const parts = [];
@@ -2066,8 +2065,12 @@ async function loadCustomerOrders() {
       if (parts.length) prods.push(`${p.code}: ${parts.join(', ')}`);
     });
     if (!prods.length) return;
-    const invoice = (r[C.invoice]||'').trim() || (r[C.po]||'').trim();
-    coPending.push({ invoice, po:(r[C.po]||'').trim(), date:(r[C.orderDate]||'').trim(), customer:(r[C.customer]||'').trim(), prods, orderNo:'CO-'+invoice });
+    const po = (r[C.po]||'').trim();
+    const customer = (r[C.customer]||'').trim();
+    const date = (r[C.orderDate]||'').trim();
+    const ref = po || customer;
+    const orderNo = 'CO-' + (po || (customer + '-' + date));
+    coPending.push({ invoice:ref, po, date, customer, prods, orderNo });
   });
   renderCustomerOrders(existingSet);
 }
