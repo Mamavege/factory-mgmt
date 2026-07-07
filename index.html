@@ -1585,7 +1585,7 @@ function filterWorkOrders() {
 function renderWorkOrders(data) {
   const isAdmin = currentProfile?.role === 'admin';
   document.getElementById('wo-tbody').innerHTML = data.length ? data.map(o => `<tr>
-    <td><strong>${o.order_no}</strong></td><td>${o.product_name}</td><td>${o.quantity}</td>
+    <td><strong>${o.order_no}</strong></td><td style="white-space:pre-line;line-height:1.5">${o.product_name||''}</td><td>${o.quantity}</td>
     <td>${statusBadge(o.status,'wo')}</td><td>${o.assigned?.name||'—'}</td><td>${fmtDate(o.created_at)}</td>
     <td>${isAdmin
       ? `<button class="btn btn-secondary btn-sm" onclick="editWO('${o.id}')"><i class="ti ti-edit"></i></button> <button class="btn btn-danger btn-sm" onclick="deleteWO('${o.id}')"><i class="ti ti-trash"></i></button>`
@@ -2101,10 +2101,11 @@ function renderCustomerOrders(existingSet) {
 }
 async function createWOFromCO(i) {
   const o = coPending[i]; if (!o) return;
+  const totalQty = o.prods.reduce((s,p)=>{ const m=(p.match(/[\d.]+/g)||[]).map(Number); return s+(m.reduce((a,b)=>a+b,0)); },0);
   const payload = {
     order_no: o.orderNo,
-    product_name: o.customer + ' — ' + o.prods.join('; '),
-    quantity: 0,
+    product_name: `👤 ${o.customer}\n` + o.prods.join('\n'),
+    quantity: totalQty,
     status: 'pending',
     notes: `From customer order sheet\nCustomer: ${o.customer}\nPO: ${o.po||'-'}\nOrder date: ${o.date}\nItems:\n${o.prods.join('\n')}`,
     created_by: currentUser.id,
