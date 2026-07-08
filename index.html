@@ -2909,17 +2909,18 @@ async function costingNewMonth() {
 }
 
 async function costingLoadBOM() {
-  const { data, error } = await sb.from('costing_bom').select('*');
+  // Join with costing_materials to get name and uom via material_id FK
+  const { data, error } = await sb.from('costing_bom').select('*, costing_materials(id, name, uom)');
   if (error) { console.error('BOM load error:', error); return; }
-  if (data?.length) console.log('BOM first row columns:', Object.keys(data[0]));
   costingBOM = {};
   (data||[]).forEach(row => {
-    // normalise column name — handles material_name, name, or material
-    const matName = row.material_name ?? row.name ?? row.material ?? null;
     const code = row.product_code;
+    const matName = row.costing_materials?.name ?? row.material_name ?? null;
+    const uom     = row.costing_materials?.uom  ?? row.uom ?? '';
+    const yieldPct = Number(row.yield_rate ?? row.yield_pct ?? 100);
     if (!code || !matName) return;
     if (!costingBOM[code]) costingBOM[code] = [];
-    costingBOM[code].push({ ...row, material_name: matName });
+    costingBOM[code].push({ ...row, material_name: matName, uom, yield_pct: yieldPct });
   });
 }
 
@@ -2927,9 +2928,11 @@ async function costingLoadPrices(monthId) {
   const [{ data: thisMonthData }, { data: historical }] = await Promise.all([
     sb.from('costing_material_prices').select('*').eq('month_id', monthId),
     sb.from('costing_material_prices')
-      .select('material_name, qty_purchased, unit_price, month_id, costing_months(year,month)')
+      .select('*, costing_months(year,month)')
       .neq('month_id', monthId),
   ]);
+  if (thisMonthData?.length) console.log('material_prices columns:', Object.keys(thisMonthData[0]));
+  else if (historical?.length) console.log('material_prices columns:', Object.keys(historical[0]));
 
   costingPurchaseRecords = thisMonthData || [];
 
