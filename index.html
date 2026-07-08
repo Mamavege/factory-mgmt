@@ -2996,10 +2996,10 @@ function costingRenderPurchaseRecords() {
     return;
   }
   const rows = costingPurchaseRecords.map(r => `<tr style="border-top:1px solid var(--border)">
-    <td style="padding:6px 10px;font-weight:600">${r.material_name}</td>
+    <td style="padding:6px 10px;font-weight:600">${r.costing_materials?.name ?? r.material_name ?? '—'}</td>
     <td style="padding:6px 10px;color:var(--text-muted)">${r.supplier||'—'}</td>
     <td style="padding:6px 10px;text-align:right">${Number(r.qty_purchased).toFixed(3)}</td>
-    <td style="padding:6px 10px">${r.uom||''}</td>
+    <td style="padding:6px 10px">${r.costing_materials?.uom ?? r.uom ?? ''}</td>
     <td style="padding:6px 10px;text-align:right">RM ${Number(r.unit_price).toFixed(4)}</td>
     <td style="padding:6px 10px;text-align:right">RM ${(Number(r.qty_purchased)*Number(r.unit_price)).toFixed(2)}</td>
     <td style="padding:6px 10px"><button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:11px" onclick="costingDeletePurchaseRecord('${r.id}')"><i class="ti ti-trash"></i></button></td>
@@ -3044,15 +3044,12 @@ function costingRenderEffectivePrices() {
 }
 
 function costingShowAddPriceModal() {
-  const allFlat = Object.values(costingBOM).flat();
-  const mats = [...new Set(allFlat.map(b => b.material_name).filter(Boolean))].sort();
-  if (!mats.length) return toast('No BOM materials found. Make sure BOM data is in the database.', 'error');
-  const uomMap = {};
-  allFlat.forEach(b => { if (b.material_name && !uomMap[b.material_name]) uomMap[b.material_name] = b.uom; });
-
+  if (!costingAllMaterials.length) return toast('Materials not loaded', 'error');
   const sel = document.getElementById('cp-material');
-  sel.innerHTML = mats.map(m => `<option value="${m}">${m}</option>`).join('');
-  sel.onchange = function() { document.getElementById('cp-uom').value = uomMap[this.value]||''; };
+  sel.innerHTML = costingAllMaterials.map(m => `<option value="${m.id}" data-uom="${m.uom||''}">${m.name}</option>`).join('');
+  sel.onchange = function() {
+    document.getElementById('cp-uom').value = this.options[this.selectedIndex]?.dataset.uom || '';
+  };
   sel.dispatchEvent(new Event('change'));
   document.getElementById('cp-supplier').value = '';
   document.getElementById('cp-qty').value = '';
@@ -3061,19 +3058,18 @@ function costingShowAddPriceModal() {
 }
 
 async function costingSavePurchaseRecord() {
-  const material_name = document.getElementById('cp-material').value;
+  const material_id = document.getElementById('cp-material').value;
   const supplier = document.getElementById('cp-supplier').value.trim();
   const qty = Number(document.getElementById('cp-qty').value);
   const price = Number(document.getElementById('cp-price').value);
-  const uom = document.getElementById('cp-uom').value;
 
-  if (!material_name) return toast('Select a material','error');
+  if (!material_id) return toast('Select a material','error');
   if (!(qty > 0)) return toast('Enter valid quantity','error');
   if (!(price > 0)) return toast('Enter valid unit price','error');
 
   const { data, error } = await sb.from('costing_material_prices').insert({
-    month_id: costingCurrentMonthId, material_name, supplier, qty_purchased: qty, unit_price: price, uom
-  }).select().single();
+    month_id: costingCurrentMonthId, material_id, supplier, qty_purchased: qty, unit_price: price
+  }).select('*, costing_materials(name, uom)').single();
   if (error) return toast('Error: '+error.message,'error');
 
   costingPurchaseRecords.push(data);
@@ -3109,8 +3105,8 @@ async function costingOpenMonth(id) {
   ]);
   if (!month) return toast('Record not found', 'error');
 
-  // Load BOM and prices
-  await costingLoadBOM();
+  // Load BOM, materials list, and prices
+  await Promise.all([costingLoadBOM(), costingLoadAllMaterials()]);
   await costingLoadPrices(id);
 
   document.getElementById('costing-detail-title').textContent = `${MONTH_NAMES[month.month]} ${month.year}`;
