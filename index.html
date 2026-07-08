@@ -2909,11 +2909,17 @@ async function costingNewMonth() {
 }
 
 async function costingLoadBOM() {
-  const { data } = await sb.from('costing_bom').select('*');
+  const { data, error } = await sb.from('costing_bom').select('*');
+  if (error) { console.error('BOM load error:', error); return; }
+  if (data?.length) console.log('BOM first row columns:', Object.keys(data[0]));
   costingBOM = {};
   (data||[]).forEach(row => {
-    if (!costingBOM[row.product_code]) costingBOM[row.product_code] = [];
-    costingBOM[row.product_code].push(row);
+    // normalise column name — handles material_name, name, or material
+    const matName = row.material_name ?? row.name ?? row.material ?? null;
+    const code = row.product_code;
+    if (!code || !matName) return;
+    if (!costingBOM[code]) costingBOM[code] = [];
+    costingBOM[code].push({ ...row, material_name: matName });
   });
 }
 
@@ -3036,9 +3042,10 @@ function costingRenderEffectivePrices() {
 
 function costingShowAddPriceModal() {
   const allFlat = Object.values(costingBOM).flat();
-  const mats = [...new Set(allFlat.map(b => b.material_name))].sort();
+  const mats = [...new Set(allFlat.map(b => b.material_name).filter(Boolean))].sort();
+  if (!mats.length) return toast('No BOM materials found. Make sure BOM data is in the database.', 'error');
   const uomMap = {};
-  allFlat.forEach(b => { if (!uomMap[b.material_name]) uomMap[b.material_name] = b.uom; });
+  allFlat.forEach(b => { if (b.material_name && !uomMap[b.material_name]) uomMap[b.material_name] = b.uom; });
 
   const sel = document.getElementById('cp-material');
   sel.innerHTML = mats.map(m => `<option value="${m}">${m}</option>`).join('');
