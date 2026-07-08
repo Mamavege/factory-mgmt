@@ -3182,9 +3182,10 @@ async function costingOpenMonth(id) {
   await costingLoadPrices(id);
 
   document.getElementById('costing-detail-title').textContent = `${MONTH_NAMES[month.month]} ${month.year}`;
-  document.getElementById('cm-prod-pct').value  = month.production_pct || 80;
+  document.getElementById('cm-prod-pct').value  = 80;
   document.getElementById('cm-labour').value    = month.total_labour_cost || '';
-  document.getElementById('cm-utilities').value = month.total_utilities_cost || '';
+  document.getElementById('cm-electric').value  = month.total_electric_cost || '';
+  document.getElementById('cm-water').value     = month.total_water_cost || '';
   document.getElementById('cm-rental').value    = month.total_rental_cost || '';
 
   costingRenderPurchaseRecords();
@@ -3336,18 +3337,21 @@ function costingCalcResults() {
   COSTING_FG.forEach(fg => { totalFGOut += Number(document.getElementById(`fg-out-${fg.code}`)?.value)||0; });
 
   const labour    = Number(document.getElementById('cm-labour')?.value)||0;
-  const utilities = Number(document.getElementById('cm-utilities')?.value)||0;
+  const electric  = Number(document.getElementById('cm-electric')?.value)||0;
+  const water     = Number(document.getElementById('cm-water')?.value)||0;
   const rental    = Number(document.getElementById('cm-rental')?.value)||0;
 
-  const utilAlloc = utilities * 0.80;
-  const rentAlloc = rental    * 0.75;
+  const utilAlloc = (electric + water) * 0.80;
+  const rentAlloc = rental * 0.75;
 
   const fmtRM = v => v > 0 ? 'RM ' + v.toFixed(2) : '—';
   const laEl = document.getElementById('cm-labour-alloc');
-  const utEl = document.getElementById('cm-utilities-alloc');
+  const elEl = document.getElementById('cm-electric-alloc');
+  const waEl = document.getElementById('cm-water-alloc');
   const reEl = document.getElementById('cm-rental-alloc');
   if (laEl) laEl.textContent = fmtRM(labour);
-  if (utEl) utEl.textContent = fmtRM(utilAlloc);
+  if (elEl) elEl.textContent = fmtRM(electric * 0.80);
+  if (waEl) waEl.textContent = fmtRM(water * 0.80);
   if (reEl) reEl.textContent = fmtRM(rentAlloc);
 
   const labourRate = totalFGOut > 0 ? labour/totalFGOut : 0;
@@ -3402,9 +3406,9 @@ async function costingSaveAll() {
   if (!costingCurrentMonthId) return;
 
   const { error: mErr } = await sb.from('costing_months').update({
-    production_pct:      Number(document.getElementById('cm-prod-pct').value)||80,
     total_labour_cost:   Number(document.getElementById('cm-labour').value)||0,
-    total_utilities_cost:Number(document.getElementById('cm-utilities').value)||0,
+    total_electric_cost: Number(document.getElementById('cm-electric').value)||0,
+    total_water_cost:    Number(document.getElementById('cm-water').value)||0,
     total_rental_cost:   Number(document.getElementById('cm-rental').value)||0,
   }).eq('id', costingCurrentMonthId);
   if (mErr) return toast('Error saving shared costs: '+mErr.message,'error');
