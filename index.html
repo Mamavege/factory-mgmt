@@ -781,6 +781,12 @@
             <div class="card-header">
               <div class="card-title"><i class="ti ti-adjustments" style="color:var(--accent);margin-right:6px"></i>Shared Monthly Costs</div>
             </div>
+            <div style="padding:16px 20px 8px;border-bottom:1px solid var(--border)">
+              <div class="form-group" style="margin:0;max-width:260px">
+                <label style="font-weight:700;color:var(--accent)">Total FG Output (units) — this month</label>
+                <input type="number" id="cm-total-output" placeholder="0" min="0" class="costing-input" style="font-size:16px;padding:9px 12px;font-weight:700" oninput="costingCalcResults()">
+              </div>
+            </div>
             <div style="padding:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
               <div class="form-group" style="margin:0">
                 <label>Total Labour Cost (RM)</label>
@@ -3182,11 +3188,12 @@ async function costingOpenMonth(id) {
   await costingLoadPrices(id);
 
   document.getElementById('costing-detail-title').textContent = `${MONTH_NAMES[month.month]} ${month.year}`;
-  document.getElementById('cm-prod-pct').value  = 80;
-  document.getElementById('cm-labour').value    = month.total_labour_cost || '';
-  document.getElementById('cm-electric').value  = month.total_electric_cost || '';
-  document.getElementById('cm-water').value     = month.total_water_cost || '';
-  document.getElementById('cm-rental').value    = month.total_rental_cost || '';
+  document.getElementById('cm-prod-pct').value      = 80;
+  document.getElementById('cm-total-output').value  = month.total_fg_output || '';
+  document.getElementById('cm-labour').value         = month.total_labour_cost || '';
+  document.getElementById('cm-electric').value       = month.total_electric_cost || '';
+  document.getElementById('cm-water').value          = month.total_water_cost || '';
+  document.getElementById('cm-rental').value         = month.total_rental_cost || '';
 
   costingRenderPurchaseRecords();
   costingRenderEffectivePrices();
@@ -3333,8 +3340,7 @@ function costingCalcResults() {
     sfCPU[sf.code] = out > 0 ? (rm+pk+tr+gs)/out : 0;
   });
 
-  let totalFGOut = 0;
-  COSTING_FG.forEach(fg => { totalFGOut += Number(document.getElementById(`fg-out-${fg.code}`)?.value)||0; });
+  const totalFGOut = Number(document.getElementById('cm-total-output')?.value)||0;
 
   const labour    = Number(document.getElementById('cm-labour')?.value)||0;
   const electric  = Number(document.getElementById('cm-electric')?.value)||0;
@@ -3406,6 +3412,7 @@ async function costingSaveAll() {
   if (!costingCurrentMonthId) return;
 
   const { error: mErr } = await sb.from('costing_months').update({
+    total_fg_output:     Number(document.getElementById('cm-total-output').value)||0,
     total_labour_cost:   Number(document.getElementById('cm-labour').value)||0,
     total_electric_cost: Number(document.getElementById('cm-electric').value)||0,
     total_water_cost:    Number(document.getElementById('cm-water').value)||0,
