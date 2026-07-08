@@ -2926,30 +2926,34 @@ async function costingLoadBOM() {
 
 async function costingLoadPrices(monthId) {
   const [{ data: thisMonthData }, { data: historical }] = await Promise.all([
-    sb.from('costing_material_prices').select('*').eq('month_id', monthId),
     sb.from('costing_material_prices')
-      .select('*, costing_months(year,month)')
+      .select('*, costing_materials(name, uom)')
+      .eq('month_id', monthId),
+    sb.from('costing_material_prices')
+      .select('*, costing_materials(name, uom), costing_months(year,month)')
       .neq('month_id', monthId),
   ]);
-  if (thisMonthData?.length) console.log('material_prices columns:', Object.keys(thisMonthData[0]));
-  else if (historical?.length) console.log('material_prices columns:', Object.keys(historical[0]));
 
   costingPurchaseRecords = thisMonthData || [];
 
-  // Weighted avg for this month per material
+  // Weighted avg for this month per material (keyed by material name from join)
   const thisMonthAvg = {};
   costingPurchaseRecords.forEach(r => {
-    if (!thisMonthAvg[r.material_name]) thisMonthAvg[r.material_name] = {qty:0, cost:0};
-    thisMonthAvg[r.material_name].qty  += Number(r.qty_purchased)||0;
-    thisMonthAvg[r.material_name].cost += (Number(r.qty_purchased)||0) * (Number(r.unit_price)||0);
+    const mat = r.costing_materials?.name;
+    if (!mat) return;
+    if (!thisMonthAvg[mat]) thisMonthAvg[mat] = {qty:0, cost:0};
+    thisMonthAvg[mat].qty  += Number(r.qty_purchased)||0;
+    thisMonthAvg[mat].cost += (Number(r.qty_purchased)||0) * (Number(r.unit_price)||0);
   });
 
   // Last known price per material from historical months
   const monthlyGroups = {};
   (historical||[]).forEach(r => {
-    const key = `${r.month_id}__${r.material_name}`;
+    const mat = r.costing_materials?.name;
+    if (!mat) return;
+    const key = `${r.month_id}__${mat}`;
     if (!monthlyGroups[key]) monthlyGroups[key] = {
-      mat: r.material_name, qty:0, cost:0,
+      mat, qty:0, cost:0,
       year: r.costing_months?.year||0, month: r.costing_months?.month||0
     };
     monthlyGroups[key].qty  += Number(r.qty_purchased)||0;
