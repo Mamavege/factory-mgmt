@@ -758,7 +758,7 @@
           <div class="card">
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Period</th><th>Prod %</th><th>Labour (RM)</th><th>Utilities (RM)</th><th>Rental (RM)</th><th>Created</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Period</th><th>Labour (RM)</th><th>Utilities (RM)</th><th>Rental (RM)</th><th>Created</th><th>Actions</th></tr></thead>
                 <tbody id="costing-months-tbody"></tbody>
               </table>
             </div>
@@ -2884,6 +2884,7 @@ let costingBOM = {};             // productCode → [{material_name, qty_per_pot
 let costingEffectivePrices = {}; // material_name → {price, source, sourceLabel}
 let costingPurchaseRecords = []; // purchase records for current month
 let costingAllMaterials = [];    // [{id, name, uom, category}]
+let costingFGCostPerUnit = {};  // code → totalCPU
 
 async function costingLoad() {
   document.getElementById('costing-list-view').style.display = 'block';
@@ -2898,19 +2899,52 @@ async function costingLoad() {
     tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="ti ti-calculator"></i><p>No monthly costing records yet. Click "New Month" to start.</p></div></td></tr>`;
     return;
   }
+  // Load FG cost_per_unit for all months
+  const { data: allFGEntries } = await sb.from('costing_fg_entries')
+    .select('month_id, code, cost_per_unit, output_units')
+    .in('month_id', months.map(m => m.id));
+  const fgByMonth = {};
+  (allFGEntries||[]).forEach(r => {
+    if (!fgByMonth[r.month_id]) fgByMonth[r.month_id] = {};
+    fgByMonth[r.month_id][r.code] = r;
+  });
+
   const fmt = n => Number(n).toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
-  tbody.innerHTML = months.map(m => `<tr>
-    <td><strong>${MONTH_NAMES[m.month]} ${m.year}</strong></td>
-    <td>${m.production_pct}%</td>
-    <td>RM ${fmt(m.total_labour_cost)}</td>
-    <td>RM ${fmt(m.total_utilities_cost)}</td>
-    <td>RM ${fmt(m.total_rental_cost)}</td>
-    <td>${new Date(m.created_at).toLocaleDateString('en-MY')}</td>
-    <td style="display:flex;gap:6px">
-      <button class="btn btn-secondary btn-sm" onclick="costingOpenMonth('${m.id}')"><i class="ti ti-eye"></i> Open</button>
-      <button class="btn btn-danger btn-sm" onclick="costingDeleteMonth('${m.id}')"><i class="ti ti-trash"></i></button>
-    </td>
-  </tr>`).join('');
+  tbody.innerHTML = months.map(m => {
+    const fgMap = fgByMonth[m.id] || {};
+    const hasCPU = COSTING_FG.some(fg => fgMap[fg.code]?.cost_per_unit > 0);
+    const summaryRows = COSTING_FG.map(fg => {
+      const entry = fgMap[fg.code];
+      const cpu = entry?.cost_per_unit;
+      return cpu > 0
+        ? `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:12px">${fg.name}</span>
+            <span style="font-size:12px;font-weight:700;color:var(--success)">RM ${Number(cpu).toFixed(4)}/unit</span>
+           </div>`
+        : '';
+    }).join('');
+    return `<tr>
+      <td><strong>${MONTH_NAMES[m.month]} ${m.year}</strong></td>
+      <td>RM ${fmt(m.total_labour_cost)}</td>
+      <td>RM ${fmt(m.total_electric_cost||0 + m.total_water_cost||0)}</td>
+      <td>RM ${fmt(m.total_rental_cost)}</td>
+      <td>${new Date(m.created_at).toLocaleDateString('en-MY')}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">
+        ${hasCPU ? `<button class="btn btn-secondary btn-sm" onclick="costingToggleSummary('${m.id}')"><i class="ti ti-chart-bar"></i> Summary</button>` : ''}
+        <button class="btn btn-secondary btn-sm" onclick="costingOpenMonth('${m.id}')"><i class="ti ti-eye"></i> Open</button>
+        <button class="btn btn-danger btn-sm" onclick="costingDeleteMonth('${m.id}')"><i class="ti ti-trash"></i></button>
+      </td>
+    </tr>
+    ${hasCPU ? `<tr id="summary-${m.id}" style="display:none"><td colspan="6" style="padding:10px 18px;background:var(--bg)">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">FG Cost / Unit — ${MONTH_NAMES[m.month]} ${m.year}</div>
+      ${summaryRows}
+    </td></tr>` : ''}`;
+  }).join('');
+}
+
+function costingToggleSummary(id) {
+  const el = document.getElementById(`summary-${id}`);
+  if (el) el.style.display = el.style.display === 'none' ? 'table-row' : 'none';
 }
 
 async function costingNewMonth() {
@@ -3367,6 +3401,7 @@ function costingCalcResults() {
   const rentRate   = totalFGOut > 0 ? rentAlloc/totalFGOut : 0;
 
   const fmt4 = v => v > 0 ? v.toFixed(4) : '—';
+  costingFGCostPerUnit = {};
   const tbody = document.getElementById('costing-results-tbody');
   tbody.innerHTML = COSTING_FG.map(fg => {
     const out   = Number(document.getElementById(`fg-out-${fg.code}`)?.value)||0;
@@ -3378,6 +3413,7 @@ function costingCalcResults() {
     const pkCPU    = out>0 ? pk/out : 0;
     const trCPU    = out>0 ? tr/out : 0;
     const totalCPU = sfCost+rmCPU+pkCPU+trCPU+labourRate+utilRate+rentRate;
+    costingFGCostPerUnit[fg.code] = out > 0 ? totalCPU : 0;
     return `<tr>
       <td><span class="badge badge-info">${fg.code}</span></td>
       <td style="font-size:12px">${fg.name}</td>
@@ -3444,6 +3480,7 @@ async function costingSaveAll() {
     raw_material_cost: Number(document.getElementById(`fg-rm-${fg.code}`)?.value)||0,
     packaging_cost:    Number(document.getElementById(`fg-pk-${fg.code}`)?.value)||0,
     transport_cost:    Number(document.getElementById(`fg-tr-${fg.code}`)?.value)||0,
+    cost_per_unit:     costingFGCostPerUnit[fg.code] || 0,
   }));
   const { error: fgErr } = await sb.from('costing_fg_entries').upsert(fgRows,{onConflict:'month_id,code'});
   if (fgErr) return toast('Error saving FG: '+fgErr.message,'error');
