@@ -2916,35 +2916,36 @@ async function costingLoad() {
     const summaryRows = COSTING_FG.map(fg => {
       const entry = fgMap[fg.code];
       const cpu = entry?.cost_per_unit;
-      return cpu > 0
-        ? `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)">
-            <span style="font-size:12px">${fg.name}</span>
-            <span style="font-size:12px;font-weight:700;color:var(--success)">RM ${Number(cpu).toFixed(4)}/unit</span>
-           </div>`
-        : '';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:12px;color:var(--text)">${fg.name}</span>
+          <span style="font-size:12px;font-weight:700;${cpu>0?'color:var(--success)':'color:var(--text-muted)'}">${cpu>0?'RM '+Number(cpu).toFixed(4)+'/unit':'—'}</span>
+         </div>`;
     }).join('');
-    return `<tr>
-      <td><strong>${MONTH_NAMES[m.month]} ${m.year}</strong></td>
+    return `<tr style="cursor:pointer" onclick="costingToggleSummary('${m.id}')">
+      <td><strong>${MONTH_NAMES[m.month]} ${m.year}</strong> <i class="ti ti-chevron-down" id="chevron-${m.id}" style="font-size:11px;color:var(--text-muted);transition:transform .2s"></i></td>
       <td>RM ${fmt(m.total_labour_cost)}</td>
-      <td>RM ${fmt(m.total_electric_cost||0 + m.total_water_cost||0)}</td>
+      <td>RM ${fmt((m.total_electric_cost||0) + (m.total_water_cost||0))}</td>
       <td>RM ${fmt(m.total_rental_cost)}</td>
       <td>${new Date(m.created_at).toLocaleDateString('en-MY')}</td>
-      <td style="display:flex;gap:6px;flex-wrap:wrap">
-        ${hasCPU ? `<button class="btn btn-secondary btn-sm" onclick="costingToggleSummary('${m.id}')"><i class="ti ti-chart-bar"></i> Summary</button>` : ''}
+      <td onclick="event.stopPropagation()" style="display:flex;gap:6px">
         <button class="btn btn-secondary btn-sm" onclick="costingOpenMonth('${m.id}')"><i class="ti ti-eye"></i> Open</button>
         <button class="btn btn-danger btn-sm" onclick="costingDeleteMonth('${m.id}')"><i class="ti ti-trash"></i></button>
       </td>
     </tr>
-    ${hasCPU ? `<tr id="summary-${m.id}" style="display:none"><td colspan="6" style="padding:10px 18px;background:var(--bg)">
-      <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">FG Cost / Unit — ${MONTH_NAMES[m.month]} ${m.year}</div>
-      ${summaryRows}
-    </td></tr>` : ''}`;
+    <tr id="summary-${m.id}" style="display:none"><td colspan="6" style="padding:0 18px 12px;background:var(--bg)">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;padding:10px 0 6px">FG Cost / Unit — ${MONTH_NAMES[m.month]} ${m.year}</div>
+      ${hasCPU ? summaryRows : '<div style="font-size:12px;color:var(--text-muted);padding:6px 0">No data yet — open the month, fill in values and Save.</div>'}
+    </td></tr>`;
   }).join('');
 }
 
 function costingToggleSummary(id) {
   const el = document.getElementById(`summary-${id}`);
-  if (el) el.style.display = el.style.display === 'none' ? 'table-row' : 'none';
+  const ch = document.getElementById(`chevron-${id}`);
+  if (!el) return;
+  const open = el.style.display === 'none';
+  el.style.display = open ? 'table-row' : 'none';
+  if (ch) ch.style.transform = open ? 'rotate(180deg)' : '';
 }
 
 async function costingNewMonth() {
