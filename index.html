@@ -2855,6 +2855,7 @@ let costingCurrentMonthId = null;
 let costingBOM = {};             // productCode → [{material_name, qty_per_pot, uom, yield_pct}]
 let costingEffectivePrices = {}; // material_name → {price, source, sourceLabel}
 let costingPurchaseRecords = []; // purchase records for current month
+let costingAllMaterials = [];    // [{id, name, uom, category}]
 
 async function costingLoad() {
   document.getElementById('costing-list-view').style.display = 'block';
@@ -2906,6 +2907,11 @@ async function costingNewMonth() {
   }).select().single();
   if (error) return toast('Error: ' + error.message, 'error');
   await costingOpenMonth(data.id);
+}
+
+async function costingLoadAllMaterials() {
+  const { data } = await sb.from('costing_materials').select('id, name, uom, category').order('name');
+  costingAllMaterials = data || [];
 }
 
 async function costingLoadBOM() {
