@@ -897,7 +897,13 @@
     </div>
     <div class="form-group">
       <label>Material</label>
-      <select id="cp-material" class="form-control"></select>
+      <div style="position:relative" id="cp-material-wrap">
+        <input type="text" id="cp-material-search" class="form-control" placeholder="Type to search..." autocomplete="off"
+          oninput="costingMaterialSearch(this.value)" onfocus="costingMaterialSearch(this.value)"
+          onblur="setTimeout(()=>document.getElementById('cp-material-dropdown').style.display='none',150)">
+        <div id="cp-material-dropdown" style="display:none;position:absolute;z-index:999;left:0;right:0;top:100%;background:var(--card);border:1px solid var(--border);border-radius:7px;max-height:200px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.12)"></div>
+        <input type="hidden" id="cp-material">
+      </div>
     </div>
     <div class="form-group">
       <label>UOM</label>
@@ -3060,29 +3066,57 @@ function costingRenderEffectivePrices() {
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
+let _cpCurrentCategory = 'raw_material';
+let _cpFilteredMaterials = [];
+
 function costingFilterMaterialsByCategory(cat) {
+  _cpCurrentCategory = cat;
   document.getElementById('cp-cat-raw').className = cat === 'raw_material' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
   document.getElementById('cp-cat-pkg').className = cat === 'packaging'    ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
   document.getElementById('cp-cat-raw').style.flex = '1';
   document.getElementById('cp-cat-pkg').style.flex = '1';
-  const filtered = costingAllMaterials.filter(m => m.category === cat);
-  const sel = document.getElementById('cp-material');
-  sel.innerHTML = filtered.length
-    ? filtered.map(m => `<option value="${m.id}" data-uom="${m.uom||''}">${m.name}</option>`).join('')
-    : '<option value="">— No materials in this category —</option>';
-  sel.dispatchEvent(new Event('change'));
+  _cpFilteredMaterials = costingAllMaterials.filter(m => m.category === cat);
+  // Reset selection
+  document.getElementById('cp-material-search').value = '';
+  document.getElementById('cp-material').value = '';
+  document.getElementById('cp-uom').value = '';
+  document.getElementById('cp-material-dropdown').style.display = 'none';
+}
+
+function costingMaterialSearch(q) {
+  const dd = document.getElementById('cp-material-dropdown');
+  const matches = q.trim()
+    ? _cpFilteredMaterials.filter(m => m.name.toLowerCase().includes(q.toLowerCase()))
+    : _cpFilteredMaterials;
+  if (!matches.length) {
+    dd.innerHTML = '<div style="padding:10px 14px;color:var(--text-muted);font-size:13px">No matches</div>';
+  } else {
+    dd.innerHTML = matches.map(m =>
+      `<div style="padding:9px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)"
+        onmousedown="costingSelectMaterial('${m.id}','${m.name.replace(/'/g,"\\'")}','${m.uom||''}')"
+        onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">${m.name} <span style="color:var(--text-muted);font-size:11px">${m.uom||''}</span></div>`
+    ).join('');
+  }
+  dd.style.display = 'block';
+}
+
+function costingSelectMaterial(id, name, uom) {
+  document.getElementById('cp-material').value = id;
+  document.getElementById('cp-material-search').value = name;
+  document.getElementById('cp-uom').value = uom;
+  document.getElementById('cp-material-dropdown').style.display = 'none';
 }
 
 function costingShowAddPriceModal() {
   if (!costingAllMaterials.length) return toast('Materials not loaded', 'error');
-  const sel = document.getElementById('cp-material');
-  sel.onchange = function() {
-    document.getElementById('cp-uom').value = this.options[this.selectedIndex]?.dataset.uom || '';
-  };
   document.getElementById('cp-supplier').value = '';
   document.getElementById('cp-qty').value = '';
   document.getElementById('cp-price').value = '';
-  costingFilterMaterialsByCategory('raw_material'); // default to raw material
+  costingFilterMaterialsByCategory('raw_material');
+  // Close dropdown when clicking outside
+  setTimeout(() => {
+    document.getElementById('cp-material-search').focus();
+  }, 200);
   openModal('modal-costing-price');
 }
 
