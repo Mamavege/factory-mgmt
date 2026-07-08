@@ -2285,9 +2285,10 @@ function openWipModal(station, data=null) {
     fills.forEach(f=>{ if(!seen.has(f.batch_no)){ seen.add(f.batch_no); opts.push(f); } });
     const chosen = (data?.prepared_for||'').split(',').map(s=>s.trim()).filter(Boolean);
     const list = document.getElementById('wip-fillbatch-list');
+    list.style.textAlign = 'left';
     list.innerHTML = opts.length ? opts.map(f=>{
       const lbl = f.batch_no + (f.product_name?` — ${f.product_name}`:'');
-      return `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;cursor:pointer"><input type="checkbox" class="wip-fill-cb" value="${f.batch_no}"${chosen.includes(f.batch_no)?' checked':''}> ${lbl}</label>`;
+      return `<label style="display:flex;align-items:center;gap:8px;padding:5px 4px;font-size:13px;cursor:pointer;text-align:left;border-bottom:1px solid var(--border)"><input type="checkbox" class="wip-fill-cb" value="${f.batch_no}" style="flex:none;width:16px;height:16px;margin:0"${chosen.includes(f.batch_no)?' checked':''}><span style="flex:1">${lbl}</span></label>`;
     }).join('') : '<div style="font-size:12px;color:var(--text-muted)">No filling batches logged yet — log Filling first.</div>';
   } else {
     targetGroup.style.display = 'none';
