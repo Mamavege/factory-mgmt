@@ -1185,7 +1185,7 @@
       </select>
     </div>
     <div class="form-group" id="wip-fillbatch-group" style="display:none">
-      <label>Semi from Filling <span style="font-size:11px;color:var(--text-muted)">(tick the batches used — at least 3)</span></label>
+      <label>Semi from Filling <span style="font-size:11px;color:var(--text-muted)">(tick at least 1 — used qty follows the packing output)</span></label>
       <div id="wip-fillbatch-list" style="max-height:150px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px"></div>
     </div>
     <div class="form-group" id="wip-batch-group" style="display:none">
@@ -2438,10 +2438,9 @@ function openWipModal(station, data=null) {
     list.innerHTML = batches.length ? batches.map(b=>{
       const checked = b in chosenMap;
       const lbl = b + (prod[b]?` — ${prod[b]}`:'');
-      return `<label style="display:flex;align-items:center;gap:8px;padding:5px 4px;font-size:13px;text-align:left;border-bottom:1px solid var(--border)">
-        <input type="checkbox" class="wip-fill-cb" value="${b}" style="flex:none;width:16px;height:16px;margin:0"${checked?' checked':''} onchange="this.parentNode.querySelector('.wip-fill-qty').disabled=!this.checked">
+      return `<label style="display:flex;align-items:center;gap:8px;padding:5px 4px;font-size:13px;text-align:left;border-bottom:1px solid var(--border);cursor:pointer">
+        <input type="checkbox" class="wip-fill-cb" value="${b}" style="flex:none;width:16px;height:16px;margin:0"${checked?' checked':''}>
         <span style="flex:1">${lbl} <small style="color:var(--success)">bal ${rem[b].toFixed(0)}</small></span>
-        <input type="number" class="wip-fill-qty" placeholder="used" min="0" step="0.01" value="${chosenMap[b]||''}" ${checked?'':'disabled'} style="width:72px;flex:none">
       </label>`;
     }).join('') : '<div style="font-size:12px;color:var(--text-muted)">No filling stock available — log Filling first.</div>';
   } else {
@@ -2517,13 +2516,11 @@ async function saveWip() {
   const station = document.getElementById('wip-station').value;
   let preparedFor = document.getElementById('wip-target').value || null;
   if (station === 'packing') {
-    const pairs = [];
-    document.querySelectorAll('#wip-fillbatch-list label').forEach(r=>{
-      const cb = r.querySelector('.wip-fill-cb');
-      if (cb && cb.checked) { const qty = parseFloat(r.querySelector('.wip-fill-qty')?.value)||0; pairs.push(cb.value+':'+qty); }
-    });
-    if (pairs.length && pairs.length < 3) toast('Note: fewer than 3 semis selected','error');
-    preparedFor = pairs.length ? pairs.join(', ') : null;
+    // used qty per ticked batch = the packing output (no separate entry needed)
+    const outQty = parseFloat(document.getElementById('wip-output').value)||0;
+    const checked = [...document.querySelectorAll('.wip-fill-cb:checked')].map(cb=>cb.value);
+    if (!checked.length) toast('Note: no semi batch ticked','error');
+    preparedFor = checked.length ? checked.map(b=>b+':'+outQty).join(', ') : null;
   }
   const payload = {
     workstation: station,
