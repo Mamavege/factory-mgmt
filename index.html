@@ -1060,6 +1060,10 @@
         <option value="">— Select target —</option>
       </select>
     </div>
+    <div class="form-group" id="wip-fillbatch-group" style="display:none">
+      <label>Semi from Filling <span style="font-size:11px;color:var(--text-muted)">(tick the batches used — at least 3)</span></label>
+      <div id="wip-fillbatch-list" style="max-height:150px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px"></div>
+    </div>
     <div class="form-group" id="wip-batch-group" style="display:none">
       <label>Batch No.</label>
       <input type="text" id="wip-batch" placeholder="e.g. B-20260707-01">
@@ -2140,7 +2144,7 @@ const WIP_PRODUCTS = {
   preparing: ['CABBAGE','GINGER','SWEET RADISH','TOMATO','LEMONGRASS/SERAI','GALANGAL/LENGKUAS','TURMERIC/KUNYIT','VIETNAMESE CORIANDER/DAUN KESUM','CHILI','KAFFIR LIME LEAVE/DAU LIMAU','POTATO','SWEET CORN','THAI CORIANDER/DAUN KETUMBAR THAILAND'],
   cooking:   ['TSO','GTY','SWEET RADISH','SOY SAUCE','TY','GARNISH (CABBAGE)','LUNCH BOX','CLO','SHCR'],
   filling:   ['TSO','GTY','SWEET RADISH','SOY SAUCE','TY','GARNISH (CABBAGE)','CLO','SHCR','DIY','MALA','BBQ','OAT MILK POWDER'],
-  packing:   ['TSO','GTY','SWEET RADISH','SOY SAUCE','TY','GARNISH (CABBAGE)','CLO','SHCR','DIY','MALA','BBQ','OAT MILK POWDER'],
+  packing:   ['SHTY','SHCR','SMCL','SMTS','POCL','POTS','GTSN','POGT','KPM','CLM','BBQ','MALA','TYSP','TMSP'],
 };
 // Target WIP/FG that raw material is being prepared for (used by Preparing station for costing)
 const WIP_PREP_TARGETS = [...new Set([...WIP_PRODUCTS.cooking, ...WIP_PRODUCTS.filling])];
@@ -2265,23 +2269,29 @@ function openWipModal(station, data=null) {
   const targetGroup = document.getElementById('wip-target-group');
   const targetSel = document.getElementById('wip-target');
   const targetLabel = document.getElementById('wip-target-label');
+  const fillbatchGroup = document.getElementById('wip-fillbatch-group');
   if (station === 'preparing') {
     targetGroup.style.display = '';
+    fillbatchGroup.style.display = 'none';
     targetLabel.textContent = 'Preparing For (WIP / FG)';
     targetSel.innerHTML = '<option value="">— Select target —</option>' + WIP_PREP_TARGETS.map(p=>`<option value="${p}"${data?.prepared_for===p?' selected':''}>${p}</option>`).join('');
   } else if (station === 'packing') {
-    targetGroup.style.display = '';
-    targetLabel.textContent = 'From Filling Batch';
-    // distinct filling batches (batch — product) from existing WIP entries
+    targetGroup.style.display = 'none';
+    targetSel.value = '';
+    fillbatchGroup.style.display = '';
+    // multi-select checklist of distinct filling batches
     const fills = allWip.filter(e=>e.workstation==='filling' && e.batch_no);
     const seen = new Set(); const opts = [];
     fills.forEach(f=>{ if(!seen.has(f.batch_no)){ seen.add(f.batch_no); opts.push(f); } });
-    targetSel.innerHTML = '<option value="">— Select filling batch —</option>' + opts.map(f=>{
+    const chosen = (data?.prepared_for||'').split(',').map(s=>s.trim()).filter(Boolean);
+    const list = document.getElementById('wip-fillbatch-list');
+    list.innerHTML = opts.length ? opts.map(f=>{
       const lbl = f.batch_no + (f.product_name?` — ${f.product_name}`:'');
-      return `<option value="${f.batch_no}"${data?.prepared_for===f.batch_no?' selected':''}>${lbl}</option>`;
-    }).join('');
+      return `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;cursor:pointer"><input type="checkbox" class="wip-fill-cb" value="${f.batch_no}"${chosen.includes(f.batch_no)?' checked':''}> ${lbl}</label>`;
+    }).join('') : '<div style="font-size:12px;color:var(--text-muted)">No filling batches logged yet — log Filling first.</div>';
   } else {
     targetGroup.style.display = 'none';
+    fillbatchGroup.style.display = 'none';
     targetSel.value = '';
   }
 
@@ -2349,11 +2359,18 @@ async function deleteWip(id) {
 }
 async function saveWip() {
   const id = document.getElementById('wip-id').value;
+  const station = document.getElementById('wip-station').value;
+  let preparedFor = document.getElementById('wip-target').value || null;
+  if (station === 'packing') {
+    const checked = [...document.querySelectorAll('.wip-fill-cb:checked')].map(cb=>cb.value);
+    if (checked.length && checked.length < 3) toast('Note: fewer than 3 semis selected','error');
+    preparedFor = checked.length ? checked.join(', ') : null;
+  }
   const payload = {
-    workstation: document.getElementById('wip-station').value,
+    workstation: station,
     work_date:   document.getElementById('wip-date').value,
     product_name:document.getElementById('wip-product').value,
-    prepared_for:document.getElementById('wip-target').value || null,
+    prepared_for:preparedFor,
     batch_no:    document.getElementById('wip-batch').value || null,
     input_kg:    parseFloat(document.getElementById('wip-input').value)||0,
     output_kg:   parseFloat(document.getElementById('wip-output').value)||0,
