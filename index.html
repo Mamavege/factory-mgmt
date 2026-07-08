@@ -2255,6 +2255,21 @@ function renderWipStations() {
     </div>`;
   }).join('');
 }
+// Semi balance per filling batch = filling output − packing used (across all packing entries)
+function fillingBatchInfo(excludeId) {
+  const out={}, used={}, prod={};
+  allWip.forEach(e=>{
+    if (e.workstation==='filling' && e.batch_no) {
+      out[e.batch_no] = (out[e.batch_no]||0) + (parseFloat(e.output_kg)||0);
+      if (e.product_name && !prod[e.batch_no]) prod[e.batch_no] = e.product_name;
+    }
+    if (e.workstation==='packing' && e.prepared_for && e.id!==excludeId) {
+      e.prepared_for.split(',').forEach(pair=>{ const [b,q]=pair.split(':').map(s=>s.trim()); if(b) used[b]=(used[b]||0)+(parseFloat(q)||0); });
+    }
+  });
+  const rem={}; Object.keys(out).forEach(b=> rem[b]=out[b]-(used[b]||0));
+  return { out, used, rem, prod };
+}
 function openWipModal(station, data=null) {
   document.getElementById('modal-wip-title').textContent = data ? 'Edit WIP Entry' : 'Log WIP Entry';
   document.getElementById('wip-id').value = data?.id||'';
@@ -2279,17 +2294,22 @@ function openWipModal(station, data=null) {
     targetGroup.style.display = 'none';
     targetSel.value = '';
     fillbatchGroup.style.display = '';
-    // multi-select checklist of distinct filling batches
-    const fills = allWip.filter(e=>e.workstation==='filling' && e.batch_no);
-    const seen = new Set(); const opts = [];
-    fills.forEach(f=>{ if(!seen.has(f.batch_no)){ seen.add(f.batch_no); opts.push(f); } });
-    const chosen = (data?.prepared_for||'').split(',').map(s=>s.trim()).filter(Boolean);
+    // Only show filling batches that still have semi balance (filling output − packing used)
+    const { rem, prod } = fillingBatchInfo(data?.id);
+    const chosenMap = {};
+    (data?.prepared_for||'').split(',').forEach(pair=>{ const [b,q]=pair.split(':').map(s=>s.trim()); if(b) chosenMap[b]=q||''; });
+    const batches = Object.keys(rem).filter(b => rem[b] > 0.0001 || (b in chosenMap));
     const list = document.getElementById('wip-fillbatch-list');
     list.style.textAlign = 'left';
-    list.innerHTML = opts.length ? opts.map(f=>{
-      const lbl = f.batch_no + (f.product_name?` — ${f.product_name}`:'');
-      return `<label style="display:flex;align-items:center;gap:8px;padding:5px 4px;font-size:13px;cursor:pointer;text-align:left;border-bottom:1px solid var(--border)"><input type="checkbox" class="wip-fill-cb" value="${f.batch_no}" style="flex:none;width:16px;height:16px;margin:0"${chosen.includes(f.batch_no)?' checked':''}><span style="flex:1">${lbl}</span></label>`;
-    }).join('') : '<div style="font-size:12px;color:var(--text-muted)">No filling batches logged yet — log Filling first.</div>';
+    list.innerHTML = batches.length ? batches.map(b=>{
+      const checked = b in chosenMap;
+      const lbl = b + (prod[b]?` — ${prod[b]}`:'');
+      return `<label style="display:flex;align-items:center;gap:8px;padding:5px 4px;font-size:13px;text-align:left;border-bottom:1px solid var(--border)">
+        <input type="checkbox" class="wip-fill-cb" value="${b}" style="flex:none;width:16px;height:16px;margin:0"${checked?' checked':''} onchange="this.parentNode.querySelector('.wip-fill-qty').disabled=!this.checked">
+        <span style="flex:1">${lbl} <small style="color:var(--success)">bal ${rem[b].toFixed(0)}</small></span>
+        <input type="number" class="wip-fill-qty" placeholder="used" min="0" step="0.01" value="${chosenMap[b]||''}" ${checked?'':'disabled'} style="width:72px;flex:none">
+      </label>`;
+    }).join('') : '<div style="font-size:12px;color:var(--text-muted)">No filling stock available — log Filling first.</div>';
   } else {
     targetGroup.style.display = 'none';
     fillbatchGroup.style.display = 'none';
@@ -2363,9 +2383,13 @@ async function saveWip() {
   const station = document.getElementById('wip-station').value;
   let preparedFor = document.getElementById('wip-target').value || null;
   if (station === 'packing') {
-    const checked = [...document.querySelectorAll('.wip-fill-cb:checked')].map(cb=>cb.value);
-    if (checked.length && checked.length < 3) toast('Note: fewer than 3 semis selected','error');
-    preparedFor = checked.length ? checked.join(', ') : null;
+    const pairs = [];
+    document.querySelectorAll('#wip-fillbatch-list label').forEach(r=>{
+      const cb = r.querySelector('.wip-fill-cb');
+      if (cb && cb.checked) { const qty = parseFloat(r.querySelector('.wip-fill-qty')?.value)||0; pairs.push(cb.value+':'+qty); }
+    });
+    if (pairs.length && pairs.length < 3) toast('Note: fewer than 3 semis selected','error');
+    preparedFor = pairs.length ? pairs.join(', ') : null;
   }
   const payload = {
     workstation: station,
