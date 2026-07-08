@@ -2932,17 +2932,17 @@ async function costingLoadBOM() {
 
 async function costingLoadPrices(monthId) {
   const [{ data: thisMonthData }, { data: historical }] = await Promise.all([
-    sb.from('costing_material_prices')
+    sb.from('costing_purchase_records')
       .select('*, costing_materials(name, uom)')
       .eq('month_id', monthId),
-    sb.from('costing_material_prices')
+    sb.from('costing_purchase_records')
       .select('*, costing_materials(name, uom), costing_months(year,month)')
       .neq('month_id', monthId),
   ]);
 
   costingPurchaseRecords = thisMonthData || [];
 
-  // Weighted avg for this month per material (keyed by material name from join)
+  // Weighted avg for this month per material
   const thisMonthAvg = {};
   costingPurchaseRecords.forEach(r => {
     const mat = r.costing_materials?.name;
@@ -3077,7 +3077,7 @@ async function costingSavePurchaseRecord() {
   if (!(qty > 0)) return toast('Enter valid quantity','error');
   if (!(price > 0)) return toast('Enter valid unit price','error');
 
-  const { data, error } = await sb.from('costing_material_prices').insert({
+  const { data, error } = await sb.from('costing_purchase_records').insert({
     month_id: costingCurrentMonthId, material_id, supplier, qty_purchased: qty, unit_price: price
   }).select('*, costing_materials(name, uom)').single();
   if (error) return toast('Error: '+error.message,'error');
@@ -3094,7 +3094,7 @@ async function costingSavePurchaseRecord() {
 
 async function costingDeletePurchaseRecord(id) {
   if (!confirm('Delete this purchase record?')) return;
-  const { error } = await sb.from('costing_material_prices').delete().eq('id',id);
+  const { error } = await sb.from('costing_purchase_records').delete().eq('id',id);
   if (error) return toast('Error: '+error.message,'error');
   costingPurchaseRecords = costingPurchaseRecords.filter(r => r.id !== id);
   await costingLoadPrices(costingCurrentMonthId);
