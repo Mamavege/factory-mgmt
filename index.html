@@ -2255,7 +2255,7 @@ function renderWipStations() {
     const showYield = st.id === 'preparing';         // only preparing tracks kg input/yield/wastage
     const hasBatch  = st.id === 'cooking' || st.id === 'filling' || st.id === 'packing';
     const unit = WIP_UNITS[st.id] || 'kg';
-    const fillRem = st.id === 'filling' ? fillingBatchInfo().rem : null;   // semi balance left per batch
+    const fillInfo = st.id === 'filling' ? fillingBatchInfo() : null;   // semi balance left per batch
     const totalInput  = entries.reduce((s,e)=>s+(parseFloat(e.input_kg)||0),0);
     const totalOutput = entries.reduce((s,e)=>s+(parseFloat(e.output_kg)||0),0);
     const totalWaste  = entries.reduce((s,e)=>s+(parseFloat(e.wastage_kg)||0),0);
@@ -2317,7 +2317,7 @@ function renderWipStations() {
             ${hasBatch?`<td style="padding:7px 12px;font-size:12px">${e.batch_no||'—'}</td>`:''}
             ${showYield?td(e.input_kg??'—'):''}
             ${td(e.output_kg??'—','font-weight:600')}
-            ${st.id==='filling'?td(e.batch_no&&fillRem?(fillRem[e.batch_no]??0).toFixed(0):'—','color:var(--success);font-weight:700'):''}
+            ${st.id==='filling'?`<td style="padding:7px 12px;font-size:12px;text-align:right"><label style="display:inline-flex;align-items:center;gap:5px;justify-content:flex-end;cursor:pointer" title="Tick when this batch is used up"><input type="checkbox" onchange="toggleDepleted('${e.id}',this.checked)"${e.depleted?' checked':''}><span style="font-weight:700;color:${e.depleted?'var(--text-muted)':'var(--success)'}">${e.depleted?'used up':(e.batch_no&&fillInfo?(fillInfo.rem[e.batch_no]??0).toFixed(0):'—')}</span></label></td>`:''}
             ${showYield?td(yld,'color:var(--success);font-weight:600'):''}
             ${showYield?td(e.wastage_kg??'—','color:var(--warning)'):''}
             ${td(e.reject_qty??'—','color:var(--danger)')}
@@ -2336,18 +2336,25 @@ function renderWipStations() {
 }
 // Semi balance per filling batch = filling output − packing used (across all packing entries)
 function fillingBatchInfo(excludeId) {
-  const out={}, used={}, prod={};
+  const out={}, used={}, prod={}, depleted=new Set();
   allWip.forEach(e=>{
     if (e.workstation==='filling' && e.batch_no) {
       out[e.batch_no] = (out[e.batch_no]||0) + (parseFloat(e.output_kg)||0);
       if (e.product_name && !prod[e.batch_no]) prod[e.batch_no] = e.product_name;
+      if (e.depleted) depleted.add(e.batch_no);
     }
     if (e.workstation==='packing' && e.prepared_for && e.id!==excludeId) {
       e.prepared_for.split(',').forEach(pair=>{ const [b,q]=pair.split(':').map(s=>s.trim()); if(b) used[b]=(used[b]||0)+(parseFloat(q)||0); });
     }
   });
   const rem={}; Object.keys(out).forEach(b=> rem[b]=out[b]-(used[b]||0));
-  return { out, used, rem, prod };
+  depleted.forEach(b=>{ if(b in rem) rem[b]=0; });   // manually marked used-up → balance 0
+  return { out, used, rem, prod, depleted };
+}
+async function toggleDepleted(id, val) {
+  const { error } = await sb.from('wip_entries').update({depleted:val}).eq('id',id);
+  if (error) return toast('Update failed: '+error.message,'error');
+  loadWip();
 }
 function openWipModal(station, data=null) {
   document.getElementById('modal-wip-title').textContent = data ? 'Edit WIP Entry' : 'Log WIP Entry';
