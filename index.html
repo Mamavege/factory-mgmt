@@ -889,6 +889,13 @@
   <div class="modal" style="max-width:480px">
     <h2>Add Purchase Record</h2>
     <div class="form-group">
+      <label>Category</label>
+      <div style="display:flex;gap:8px">
+        <button id="cp-cat-raw" class="btn btn-primary btn-sm" style="flex:1" onclick="costingFilterMaterialsByCategory('raw_material')">Raw Material</button>
+        <button id="cp-cat-pkg" class="btn btn-secondary btn-sm" style="flex:1" onclick="costingFilterMaterialsByCategory('packaging')">Packaging</button>
+      </div>
+    </div>
+    <div class="form-group">
       <label>Material</label>
       <select id="cp-material" class="form-control"></select>
     </div>
@@ -3053,17 +3060,29 @@ function costingRenderEffectivePrices() {
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
+function costingFilterMaterialsByCategory(cat) {
+  document.getElementById('cp-cat-raw').className = cat === 'raw_material' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
+  document.getElementById('cp-cat-pkg').className = cat === 'packaging'    ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
+  document.getElementById('cp-cat-raw').style.flex = '1';
+  document.getElementById('cp-cat-pkg').style.flex = '1';
+  const filtered = costingAllMaterials.filter(m => m.category === cat);
+  const sel = document.getElementById('cp-material');
+  sel.innerHTML = filtered.length
+    ? filtered.map(m => `<option value="${m.id}" data-uom="${m.uom||''}">${m.name}</option>`).join('')
+    : '<option value="">— No materials in this category —</option>';
+  sel.dispatchEvent(new Event('change'));
+}
+
 function costingShowAddPriceModal() {
   if (!costingAllMaterials.length) return toast('Materials not loaded', 'error');
   const sel = document.getElementById('cp-material');
-  sel.innerHTML = costingAllMaterials.map(m => `<option value="${m.id}" data-uom="${m.uom||''}">${m.name}</option>`).join('');
   sel.onchange = function() {
     document.getElementById('cp-uom').value = this.options[this.selectedIndex]?.dataset.uom || '';
   };
-  sel.dispatchEvent(new Event('change'));
   document.getElementById('cp-supplier').value = '';
   document.getElementById('cp-qty').value = '';
   document.getElementById('cp-price').value = '';
+  costingFilterMaterialsByCategory('raw_material'); // default to raw material
   openModal('modal-costing-price');
 }
 
