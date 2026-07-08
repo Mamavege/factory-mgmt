@@ -2179,6 +2179,7 @@ function renderWipStations() {
     const showYield = st.id === 'preparing';         // only preparing tracks kg input/yield/wastage
     const hasBatch  = st.id === 'cooking' || st.id === 'filling' || st.id === 'packing';
     const unit = WIP_UNITS[st.id] || 'kg';
+    const fillRem = st.id === 'filling' ? fillingBatchInfo().rem : null;   // semi balance left per batch
     const totalInput  = entries.reduce((s,e)=>s+(parseFloat(e.input_kg)||0),0);
     const totalOutput = entries.reduce((s,e)=>s+(parseFloat(e.output_kg)||0),0);
     const totalWaste  = entries.reduce((s,e)=>s+(parseFloat(e.wastage_kg)||0),0);
@@ -2223,6 +2224,7 @@ function renderWipStations() {
           ${hasBatch?th('Batch','left'):''}
           ${showYield?th('Input'):''}
           ${th(`Output (${unit})`)}
+          ${st.id==='filling'?th('Semi Bal'):''}
           ${showYield?th('Yield'):''}
           ${showYield?th('Waste'):''}
           ${th('Reject (kg)')}
@@ -2239,6 +2241,7 @@ function renderWipStations() {
             ${hasBatch?`<td style="padding:7px 12px;font-size:12px">${e.batch_no||'—'}</td>`:''}
             ${showYield?td(e.input_kg??'—'):''}
             ${td(e.output_kg??'—','font-weight:600')}
+            ${st.id==='filling'?td(e.batch_no&&fillRem?(fillRem[e.batch_no]??0).toFixed(0):'—','color:var(--success);font-weight:700'):''}
             ${showYield?td(yld,'color:var(--success);font-weight:600'):''}
             ${showYield?td(e.wastage_kg??'—','color:var(--warning)'):''}
             ${td(e.reject_qty??'—','color:var(--danger)')}
