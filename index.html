@@ -1969,7 +1969,7 @@ function addTxLine(prefillItemId='', prefillQty='') {
       <div class="tx-line-dd" id="tx-dd-${idx}"></div>
     </div>
     <div class="tx-line-qty">
-      <input type="number" id="tx-qty-${idx}" placeholder="Qty" min="1">
+      <input type="number" id="tx-qty-${idx}" placeholder="Qty" min="0.01" step="0.01">
     </div>
     <div class="tx-line-uom" id="tx-uom-${idx}"></div>
     ${idx>0?`<button type="button" onclick="removeTxLine(${idx})" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:18px;padding:6px 2px;line-height:1">&times;</button>`:'<div style="width:24px"></div>'}
@@ -2076,11 +2076,11 @@ async function saveTransaction() {
     const lineEl = document.getElementById('tx-line-0') || document.querySelector('.tx-line');
     const idx = lineEl?.id?.split('-')[2]||0;
     const itemId = document.getElementById(`tx-item-${idx}`).value;
-    const qty = parseInt(document.getElementById(`tx-qty-${idx}`).value)||0;
+    const qty = parseFloat(document.getElementById(`tx-qty-${idx}`).value)||0;
     if (!itemId) return toast('Please select an item','error');
     if (!qty) return toast('Please enter a quantity','error');
     const oldItemId = document.getElementById('tx-old-item-id').value;
-    const oldQty = parseInt(document.getElementById('tx-old-qty').value)||0;
+    const oldQty = parseFloat(document.getElementById('tx-old-qty').value)||0;
     const oldType = document.getElementById('tx-old-type').value;
     if (oldItemId) {
       const { data: oldItem } = await sb.from('inventory').select('quantity').eq('id',oldItemId).single();
@@ -2102,7 +2102,7 @@ async function saveTransaction() {
     document.querySelectorAll('.tx-line').forEach(el => {
       const idx = el.id.split('-')[2];
       const itemId = document.getElementById(`tx-item-${idx}`)?.value;
-      const qty = parseInt(document.getElementById(`tx-qty-${idx}`)?.value)||0;
+      const qty = parseFloat(document.getElementById(`tx-qty-${idx}`)?.value)||0;
       if (itemId && qty>0) lines.push({itemId, qty});
     });
     if (!lines.length) return toast('Please add at least one item','error');
