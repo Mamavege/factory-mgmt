@@ -3732,7 +3732,6 @@ function costingOpenProduct(type, code) {
     COSTING_SEMI_FG.forEach(sf => {
       const sfOut  = Number(document.getElementById(`sf-out-${sf.code}`)?.value) || 0;
       const sfPots = Number(document.getElementById(`sf-pots-${sf.code}`)?.value) || 0;
-      let sfRM;
       const sfRM = costingGetAutoOrManual(sf.code, 'raw_material', 'sf-rm-auto', 'sf-rm', sfPots);
       const sfPk = costingGetAutoOrManual(sf.code, 'packaging',    'sf-pk-auto', 'sf-pk', sfPots);
       const sfGs = costingGetAutoOrManual(sf.code, 'cooking_gas',  'sf-gs-auto', 'sf-gs', sfPots);
