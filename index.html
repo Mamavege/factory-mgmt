@@ -2995,17 +2995,20 @@ async function deletePlan(id) {
 
 // ─── COSTING ────────────────────────────────────────
 const COSTING_SEMI_FG = [
-  { code: 'TY',  name: 'Tomyam Paste 70G' },
-  { code: 'DIY', name: 'DIY Ingredient Pack' },
-  { code: 'SP20',name: 'Soy Sauce Pack 20G' },
-  { code: 'TSO', name: 'Toona Sinensis Oil Pack' },
-  { code: 'GP',  name: 'Garnish Pack (Cabbage)' },
-  { code: 'SP',  name: 'Soy Sauce Pack 15G' },
-  { code: 'CLO', name: 'Chili Lime Oil Pack' },
-  { code: 'SR',  name: 'Sweet Radish' },
-  { code: 'GTY', name: 'Green Tomyam Paste' },
-  { code: 'OAT', name: 'Oat Milk Powder' },
-  { code: 'VEG', name: 'Vegetable Pack' },
+  { code: 'TY',   name: 'Tomyam Paste 70G' },
+  { code: 'DIY',  name: 'DIY Ingredient Pack' },
+  { code: 'SP20', name: 'Soy Sauce Pack 20G' },
+  { code: 'TSO',  name: 'Toona Sinensis Oil Pack' },
+  { code: 'GP',   name: 'Garnish Pack (Cabbage)' },
+  { code: 'SP',   name: 'Soy Sauce Pack 15G' },
+  { code: 'CLO',  name: 'Chili Lime Oil Pack' },
+  { code: 'SR',   name: 'Sweet Radish' },
+  { code: 'GTY',  name: 'Green Tomyam Paste' },
+  { code: 'OAT',  name: 'Oat Milk Powder' },
+  { code: 'VEG',  name: 'Vegetable Pack' },
+  { code: 'PC',   name: 'Penang Curry Paste' },
+  { code: 'TY250',name: 'Tomyam Paste 250G' },
+  { code: 'TM',   name: 'Tomato Paste' },
 ];
 
 const COSTING_FG = [
@@ -3699,11 +3702,11 @@ function costingOpenProduct(type, code) {
     let rmRows = '';
     if (bom.length) {
       bom.forEach(b => {
-        const yld = b.yield_pct || 1;
+        const yld = b.yield_pct || 100;
         const ep = costingEffectivePrices[b.material_name] || { price: 0 };
-        const matCost = pots > 0 ? (b.qty_per_pot / yld) * pots * ep.price : 0;
+        const matCost = pots > 0 ? (b.qty_per_pot / (yld/100)) * pots * ep.price : 0;
         const matCPU  = out > 0 ? matCost / out : 0;
-        rmRows += tRow(b.material_name, matCPU, `${b.qty_per_pot} ${b.uom}/pot, yield ${(yld*100).toFixed(0)}%, RM ${ep.price.toFixed(4)}/${b.uom}`);
+        rmRows += tRow(b.material_name, matCPU, `${b.qty_per_pot} ${b.uom}/pot, yield ${yld.toFixed(0)}%, RM ${ep.price.toFixed(4)}/${b.uom}`);
       });
     } else {
       rmRows += tRow('Raw material (manual)', rmCPU, 'No BOM — entered manually');
