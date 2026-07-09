@@ -3621,34 +3621,50 @@ function costingOpenProduct(type, code) {
   const labourRate = totalFGOut > 0 ? labour / totalFGOut : 0;
   const utilRate   = totalFGOut > 0 ? utilAlloc / totalFGOut : 0;
   const rentRate   = totalFGOut > 0 ? rentAlloc / totalFGOut : 0;
-
   const fmt = (v, d=4) => v > 0 ? 'RM ' + v.toFixed(d) : '—';
-  const row = (label, value, note='', highlight=false) =>
-    `<tr${highlight?' style="background:#f0fdf4;font-weight:700"':''}>
-      <td style="padding:10px 14px;color:var(--text-muted);font-size:13px">${label}${note?`<div style="font-size:10px;color:var(--text-muted);margin-top:2px">${note}</div>`:''}</td>
-      <td style="padding:10px 14px;text-align:right;font-weight:600;white-space:nowrap">${value}</td>
-    </tr>`;
-  const sectionHeader = label =>
-    `<tr style="background:var(--bg)"><td colspan="2" style="padding:8px 14px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);border-top:2px solid var(--border)">${label}</td></tr>`;
 
-  let rows = '';
+  // Helper: mini card with a table
+  const miniCard = (title, tableRows, total) => `
+    <div class="card" style="margin:0">
+      <div class="card-header" style="padding:12px 16px">
+        <div class="card-title" style="font-size:13px">${title}</div>
+        <div style="font-weight:800;color:var(--accent);font-size:13px">${fmt(total)}</div>
+      </div>
+      <div class="table-wrap">
+        <table style="width:100%;font-size:12px">
+          <thead><tr style="background:var(--bg)">
+            <th style="padding:6px 12px;font-weight:600">Item</th>
+            <th style="padding:6px 12px;text-align:right;font-weight:600">RM / Unit</th>
+          </tr></thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  const tRow = (label, cpu, note='') => `
+    <tr>
+      <td style="padding:8px 12px">
+        <div style="font-weight:500">${label}</div>
+        ${note ? `<div style="font-size:10px;color:var(--text-muted);margin-top:1px">${note}</div>` : ''}
+      </td>
+      <td style="padding:8px 12px;text-align:right;font-weight:700;white-space:nowrap">${fmt(cpu)}</td>
+    </tr>`;
+
+  const monthLabel = document.getElementById('costing-detail-title')?.textContent || '';
   let totalCPU = 0;
+  let topCards = '';
+  let bottomCards = '';
 
   if (isSemi) {
-    // Semi FG
     const pots = Number(document.getElementById(`sf-pots-${code}`)?.value) || 0;
     const out  = Number(document.getElementById(`sf-out-${code}`)?.value) || 0;
     const pk   = Number(document.getElementById(`sf-pk-${code}`)?.value) || 0;
     const tr   = Number(document.getElementById(`sf-tr-${code}`)?.value) || 0;
     const gs   = Number(document.getElementById(`sf-gs-${code}`)?.value) || 0;
-
     let rm = 0;
     const autoEl = document.getElementById(`sf-rm-auto-${code}`);
-    if (autoEl) {
-      rm = costingGetSFRawMatCost(code, pots) ?? 0;
-    } else {
-      rm = Number(document.getElementById(`sf-rm-${code}`)?.value) || 0;
-    }
+    if (autoEl) rm = costingGetSFRawMatCost(code, pots) ?? 0;
+    else rm = Number(document.getElementById(`sf-rm-${code}`)?.value) || 0;
 
     const rmCPU = out > 0 ? rm / out : 0;
     const pkCPU = out > 0 ? pk / out : 0;
@@ -3656,126 +3672,84 @@ function costingOpenProduct(type, code) {
     const gsCPU = out > 0 ? gs / out : 0;
     totalCPU = rmCPU + pkCPU + trCPU + gsCPU + labourRate + utilRate;
 
-    // Raw materials
-    rows += sectionHeader('Raw Materials');
+    // Raw Materials card
     const bom = costingBOM[code] || [];
+    let rmRows = '';
     if (bom.length) {
       bom.forEach(b => {
         const yld = b.yield_pct || 1;
-        const purchaseQty = pots > 0 ? (b.qty_per_pot / yld) * pots : 0;
-        const ep = costingEffectivePrices[b.material_name] || { price: 0, sourceLabel: 'No price' };
-        const matCost = purchaseQty * ep.price;
+        const ep = costingEffectivePrices[b.material_name] || { price: 0 };
+        const matCost = pots > 0 ? (b.qty_per_pot / yld) * pots * ep.price : 0;
         const matCPU  = out > 0 ? matCost / out : 0;
-        rows += row(
-          b.material_name,
-          fmt(matCPU),
-          `${b.qty_per_pot} ${b.uom}/pot × ${pots} pots ÷ yield ${(yld*100).toFixed(0)}% × RM ${ep.price.toFixed(4)}/${b.uom}`
-        );
+        rmRows += tRow(b.material_name, matCPU, `${b.qty_per_pot} ${b.uom}/pot, yield ${(yld*100).toFixed(0)}%, RM ${ep.price.toFixed(4)}/${b.uom}`);
       });
     } else {
-      rows += row('Raw material (manual)', fmt(rmCPU), 'No BOM — entered manually');
+      rmRows += tRow('Raw material (manual)', rmCPU, 'No BOM — entered manually');
     }
+    topCards += miniCard('<i class="ti ti-plant-2" style="margin-right:4px"></i>Raw Materials', rmRows, rmCPU);
 
-    rows += sectionHeader('Packaging');
-    rows += row('Packaging materials', fmt(pkCPU), out > 0 ? `RM ${pk.toFixed(2)} ÷ ${out.toLocaleString()} units` : '');
+    // Packaging card
+    topCards += miniCard('<i class="ti ti-package" style="margin-right:4px"></i>Packaging', tRow('Packaging materials', pkCPU, out > 0 ? `RM ${pk.toFixed(2)} ÷ ${out.toLocaleString()} units` : ''), pkCPU);
 
-    rows += sectionHeader('Labour');
-    rows += row('Shared labour cost', fmt(labourRate), `RM ${labour.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} total units`);
-
-    rows += sectionHeader('Utilities');
-    rows += row('Electric + Water (80%)', fmt(utilRate), `RM ${utilAlloc.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} units`);
-
-    if (gs > 0) {
-      rows += sectionHeader('Cooking Gas');
-      rows += row('Cooking gas', fmt(gsCPU), out > 0 ? `RM ${gs.toFixed(2)} ÷ ${out.toLocaleString()} units` : '');
-    }
-    if (tr > 0) {
-      rows += sectionHeader('Transport');
-      rows += row('Transport', fmt(trCPU), out > 0 ? `RM ${tr.toFixed(2)} ÷ ${out.toLocaleString()} units` : '');
-    }
-
-    rows += row('Total Cost / Unit', out > 0 ? `RM ${totalCPU.toFixed(4)}` : '—', '', true);
+    // Other cards below
+    bottomCards += miniCard('<i class="ti ti-users" style="margin-right:4px"></i>Labour', tRow('Shared labour', labourRate, `RM ${labour.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} total units`), labourRate);
+    bottomCards += miniCard('<i class="ti ti-bolt" style="margin-right:4px"></i>Utilities', tRow('Electric + Water (80%)', utilRate, `RM ${utilAlloc.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} units`), utilRate);
+    if (gs > 0) bottomCards += miniCard('<i class="ti ti-flame" style="margin-right:4px"></i>Cooking Gas', tRow('Cooking gas', gsCPU, `RM ${gs.toFixed(2)} ÷ ${out.toLocaleString()} units`), gsCPU);
+    if (tr > 0) bottomCards += miniCard('<i class="ti ti-truck" style="margin-right:4px"></i>Transport', tRow('Transport', trCPU, `RM ${tr.toFixed(2)} ÷ ${out.toLocaleString()} units`), trCPU);
 
   } else {
-    // FG
     const fg = product;
     const out = Number(document.getElementById(`fg-out-${code}`)?.value) || 0;
     const rm  = Number(document.getElementById(`fg-rm-${code}`)?.value) || 0;
     const pk  = Number(document.getElementById(`fg-pk-${code}`)?.value) || 0;
     const tr  = Number(document.getElementById(`fg-tr-${code}`)?.value) || 0;
-
     const rmCPU = out > 0 ? rm / out : 0;
     const pkCPU = out > 0 ? pk / out : 0;
     const trCPU = out > 0 ? tr / out : 0;
 
-    // Semi FG components
     const sfCPU = {};
     COSTING_SEMI_FG.forEach(sf => {
       const sfOut  = Number(document.getElementById(`sf-out-${sf.code}`)?.value) || 0;
       const sfPots = Number(document.getElementById(`sf-pots-${sf.code}`)?.value) || 0;
       let sfRM;
-      if (document.getElementById(`sf-rm-auto-${sf.code}`)) {
-        sfRM = costingGetSFRawMatCost(sf.code, sfPots) ?? 0;
-      } else {
-        sfRM = Number(document.getElementById(`sf-rm-${sf.code}`)?.value) || 0;
-      }
+      if (document.getElementById(`sf-rm-auto-${sf.code}`)) sfRM = costingGetSFRawMatCost(sf.code, sfPots) ?? 0;
+      else sfRM = Number(document.getElementById(`sf-rm-${sf.code}`)?.value) || 0;
       const sfPk = Number(document.getElementById(`sf-pk-${sf.code}`)?.value) || 0;
       const sfTr = Number(document.getElementById(`sf-tr-${sf.code}`)?.value) || 0;
       const sfGs = Number(document.getElementById(`sf-gs-${sf.code}`)?.value) || 0;
       sfCPU[sf.code] = sfOut > 0 ? (sfRM + sfPk + sfTr + sfGs) / sfOut : 0;
     });
     const sfTotalCPU = fg.semiFG.reduce((s, c) => s + (sfCPU[c] || 0), 0);
-
     totalCPU = sfTotalCPU + rmCPU + pkCPU + trCPU + labourRate + utilRate + rentRate;
 
+    // Raw Materials card
+    topCards += miniCard('<i class="ti ti-plant-2" style="margin-right:4px"></i>Raw Materials', tRow('Raw material cost', rmCPU, out > 0 ? `RM ${rm.toFixed(2)} ÷ ${out.toLocaleString()} units` : 'No output entered'), rmCPU);
+
+    // Packaging card
+    topCards += miniCard('<i class="ti ti-package" style="margin-right:4px"></i>Packaging', tRow('Packaging materials', pkCPU, out > 0 ? `RM ${pk.toFixed(2)} ÷ ${out.toLocaleString()} units` : ''), pkCPU);
+
+    // Bottom cards
     if (fg.semiFG.length) {
-      rows += sectionHeader('Semi FG Components');
+      let sfRows = '';
       fg.semiFG.forEach(sfCode => {
         const sf = COSTING_SEMI_FG.find(x => x.code === sfCode);
-        rows += row(sf ? sf.name : sfCode, fmt(sfCPU[sfCode] || 0), `Semi FG cost/unit`);
+        sfRows += tRow(sf ? sf.name : sfCode, sfCPU[sfCode] || 0, 'Semi FG cost/unit');
       });
+      bottomCards += miniCard('<i class="ti ti-stack-2" style="margin-right:4px"></i>Semi FG Components', sfRows, sfTotalCPU);
     }
-
-    rows += sectionHeader('Raw Materials');
-    rows += row('Raw material cost', fmt(rmCPU), out > 0 ? `RM ${rm.toFixed(2)} ÷ ${out.toLocaleString()} units` : 'No output entered');
-
-    rows += sectionHeader('Packaging');
-    rows += row('Packaging materials', fmt(pkCPU), out > 0 ? `RM ${pk.toFixed(2)} ÷ ${out.toLocaleString()} units` : '');
-
-    rows += sectionHeader('Labour');
-    rows += row('Shared labour cost', fmt(labourRate), `RM ${labour.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} total units`);
-
-    rows += sectionHeader('Utilities');
-    rows += row('Electric + Water (80%)', fmt(utilRate), `RM ${utilAlloc.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} units`);
-
-    rows += sectionHeader('Rental');
-    rows += row('Rental (75%)', fmt(rentRate), `RM ${rentAlloc.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} units`);
-
-    if (tr > 0) {
-      rows += sectionHeader('Transportation');
-      rows += row('Transport expenses', fmt(trCPU), out > 0 ? `RM ${tr.toFixed(2)} ÷ ${out.toLocaleString()} units` : '');
-    }
-
-    rows += row('Total Cost / Unit', out > 0 ? `RM ${totalCPU.toFixed(4)}` : '—', '', true);
+    bottomCards += miniCard('<i class="ti ti-users" style="margin-right:4px"></i>Labour', tRow('Shared labour', labourRate, `RM ${labour.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} total units`), labourRate);
+    bottomCards += miniCard('<i class="ti ti-bolt" style="margin-right:4px"></i>Utilities', tRow('Electric + Water (80%)', utilRate, `RM ${utilAlloc.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} units`), utilRate);
+    bottomCards += miniCard('<i class="ti ti-building" style="margin-right:4px"></i>Rental', tRow('Rental (75%)', rentRate, `RM ${rentAlloc.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} units`), rentRate);
+    if (tr > 0) bottomCards += miniCard('<i class="ti ti-truck" style="margin-right:4px"></i>Transportation', tRow('Transport expenses', trCPU, `RM ${tr.toFixed(2)} ÷ ${out.toLocaleString()} units`), trCPU);
   }
 
-  const monthLabel = document.getElementById('costing-detail-title')?.textContent || '';
   document.getElementById('cpv-content').innerHTML = `
-    <div class="card">
-      <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
-        <div class="card-title"><i class="ti ti-calculator" style="color:var(--accent);margin-right:6px"></i>Cost Breakdown — ${monthLabel}</div>
-        <div style="font-size:20px;font-weight:900;color:var(--success)">${totalCPU > 0 ? 'RM ' + totalCPU.toFixed(4) + ' / unit' : '—'}</div>
-      </div>
-      <div class="table-wrap">
-        <table style="width:100%">
-          <thead><tr>
-            <th style="width:70%">Cost Category</th>
-            <th style="text-align:right">RM / Unit</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    </div>`;
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:13px;color:var(--text-muted)">Cost Breakdown — ${monthLabel}</span>
+      <span style="font-size:22px;font-weight:900;color:var(--success)">${totalCPU > 0 ? 'RM ' + totalCPU.toFixed(4) + ' / unit' : '—'}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">${topCards}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">${bottomCards}</div>`;
 }
 
 async function costingSaveAll() {
