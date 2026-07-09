@@ -813,6 +813,16 @@
           </div>
         </div>
 
+        <!-- PRODUCT DETAIL VIEW -->
+        <div id="costing-product-view" style="display:none">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+            <button class="btn btn-secondary" onclick="costingBackToDetail()"><i class="ti ti-arrow-left"></i> Back</button>
+            <span id="cpv-title" style="font-size:17px;font-weight:800"></span>
+            <span id="cpv-badge" style="margin-left:4px"></span>
+          </div>
+          <div id="cpv-content"></div>
+        </div>
+
         <!-- DETAIL VIEW -->
         <div id="costing-detail-view" style="display:none">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
@@ -3023,6 +3033,7 @@ let costingFGCostPerUnit = {};  // code → totalCPU
 async function costingLoad() {
   document.getElementById('costing-list-view').style.display = 'block';
   document.getElementById('costing-detail-view').style.display = 'none';
+  document.getElementById('costing-product-view').style.display = 'none';
 
   const { data, error } = await sb.from('costing_months').select('*').order('year',{ascending:false}).order('month',{ascending:false});
   if (error) { console.error(error); return; }
@@ -3388,7 +3399,7 @@ async function costingOpenMonth(id) {
 
     return `<tr>
       <td><span class="badge badge-purple">${sf.code}</span>${expandBtn}</td>
-      <td style="white-space:nowrap;font-size:12px">${sf.name}</td>
+      <td style="white-space:nowrap;font-size:12px"><a href="#" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:3px" onclick="costingOpenProduct('semi','${sf.code}');event.preventDefault()">${sf.name}</a></td>
       <td><input type="number" class="costing-input" id="sf-pots-${sf.code}" value="${d.pots||''}" placeholder="0" min="0" oninput="costingCalcSemiFGRow('${sf.code}');costingCalcResults()"></td>
       <td><input type="number" class="costing-input" id="sf-out-${sf.code}" value="${d.output_units||''}" placeholder="0" min="0" oninput="costingCalcSemiFGRow('${sf.code}');costingCalcResults()"></td>
       ${rmCell}
@@ -3406,7 +3417,7 @@ async function costingOpenMonth(id) {
     const sfBadges = fg.semiFG.map(c=>`<span class="badge badge-gray" style="font-size:10px;margin:1px">${c}</span>`).join('');
     return `<tr>
       <td style="white-space:nowrap"><span class="badge badge-info">${fg.code}</span>${fg.outsourced?` <span class="badge badge-warning" style="font-size:10px">Outsourced</span>`:''}</td>
-      <td style="font-size:12px;min-width:180px">${fg.name}</td>
+      <td style="font-size:12px;min-width:180px"><a href="#" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:3px" onclick="costingOpenProduct('fg','${fg.code}');event.preventDefault()">${fg.name}</a></td>
       <td style="max-width:160px">${sfBadges||'<span style="color:var(--text-muted);font-size:11px">—</span>'}</td>
       <td><input type="number" class="costing-input" id="fg-out-${fg.code}" value="${d.output_units||''}" placeholder="0" min="0" oninput="costingCalcResults()"></td>
       <td><input type="number" class="costing-input" id="fg-rm-${fg.code}"  value="${d.raw_material_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcResults()"></td>
@@ -3579,6 +3590,192 @@ function costingCalcResults() {
 function costingBackToList() {
   costingCurrentMonthId = null;
   costingLoad();
+}
+
+function costingBackToDetail() {
+  document.getElementById('costing-product-view').style.display = 'none';
+  document.getElementById('costing-detail-view').style.display = 'block';
+}
+
+function costingOpenProduct(type, code) {
+  const isSemi = type === 'semi';
+  const product = isSemi
+    ? COSTING_SEMI_FG.find(x => x.code === code)
+    : COSTING_FG.find(x => x.code === code);
+  if (!product) return;
+
+  document.getElementById('costing-detail-view').style.display = 'none';
+  document.getElementById('costing-product-view').style.display = 'block';
+  document.getElementById('cpv-title').textContent = product.name;
+  document.getElementById('cpv-badge').innerHTML = isSemi
+    ? `<span class="badge badge-purple">${code}</span> <span class="badge badge-gray" style="font-size:10px">Semi FG</span>`
+    : `<span class="badge badge-info">${code}</span> <span class="badge badge-gray" style="font-size:10px">FG</span>`;
+
+  const totalFGOut = Number(document.getElementById('cm-total-output')?.value) || 0;
+  const labour    = Number(document.getElementById('cm-labour')?.value) || 0;
+  const electric  = Number(document.getElementById('cm-electric')?.value) || 0;
+  const water     = Number(document.getElementById('cm-water')?.value) || 0;
+  const rental    = Number(document.getElementById('cm-rental')?.value) || 0;
+  const utilAlloc = (electric + water) * 0.80;
+  const rentAlloc = rental * 0.75;
+  const labourRate = totalFGOut > 0 ? labour / totalFGOut : 0;
+  const utilRate   = totalFGOut > 0 ? utilAlloc / totalFGOut : 0;
+  const rentRate   = totalFGOut > 0 ? rentAlloc / totalFGOut : 0;
+
+  const fmt = (v, d=4) => v > 0 ? 'RM ' + v.toFixed(d) : '—';
+  const row = (label, value, note='', highlight=false) =>
+    `<tr${highlight?' style="background:#f0fdf4;font-weight:700"':''}>
+      <td style="padding:10px 14px;color:var(--text-muted);font-size:13px">${label}${note?`<div style="font-size:10px;color:var(--text-muted);margin-top:2px">${note}</div>`:''}</td>
+      <td style="padding:10px 14px;text-align:right;font-weight:600;white-space:nowrap">${value}</td>
+    </tr>`;
+  const sectionHeader = label =>
+    `<tr style="background:var(--bg)"><td colspan="2" style="padding:8px 14px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);border-top:2px solid var(--border)">${label}</td></tr>`;
+
+  let rows = '';
+  let totalCPU = 0;
+
+  if (isSemi) {
+    // Semi FG
+    const pots = Number(document.getElementById(`sf-pots-${code}`)?.value) || 0;
+    const out  = Number(document.getElementById(`sf-out-${code}`)?.value) || 0;
+    const pk   = Number(document.getElementById(`sf-pk-${code}`)?.value) || 0;
+    const tr   = Number(document.getElementById(`sf-tr-${code}`)?.value) || 0;
+    const gs   = Number(document.getElementById(`sf-gs-${code}`)?.value) || 0;
+
+    let rm = 0;
+    const autoEl = document.getElementById(`sf-rm-auto-${code}`);
+    if (autoEl) {
+      rm = costingGetSFRawMatCost(code, pots) ?? 0;
+    } else {
+      rm = Number(document.getElementById(`sf-rm-${code}`)?.value) || 0;
+    }
+
+    const rmCPU = out > 0 ? rm / out : 0;
+    const pkCPU = out > 0 ? pk / out : 0;
+    const trCPU = out > 0 ? tr / out : 0;
+    const gsCPU = out > 0 ? gs / out : 0;
+    totalCPU = rmCPU + pkCPU + trCPU + gsCPU + labourRate + utilRate;
+
+    // Raw materials
+    rows += sectionHeader('Raw Materials');
+    const bom = costingBOM[code] || [];
+    if (bom.length) {
+      bom.forEach(b => {
+        const yld = b.yield_pct || 1;
+        const purchaseQty = pots > 0 ? (b.qty_per_pot / yld) * pots : 0;
+        const ep = costingEffectivePrices[b.material_name] || { price: 0, sourceLabel: 'No price' };
+        const matCost = purchaseQty * ep.price;
+        const matCPU  = out > 0 ? matCost / out : 0;
+        rows += row(
+          b.material_name,
+          fmt(matCPU),
+          `${b.qty_per_pot} ${b.uom}/pot × ${pots} pots ÷ yield ${(yld*100).toFixed(0)}% × RM ${ep.price.toFixed(4)}/${b.uom}`
+        );
+      });
+    } else {
+      rows += row('Raw material (manual)', fmt(rmCPU), 'No BOM — entered manually');
+    }
+
+    rows += sectionHeader('Packaging');
+    rows += row('Packaging materials', fmt(pkCPU), out > 0 ? `RM ${pk.toFixed(2)} ÷ ${out.toLocaleString()} units` : '');
+
+    rows += sectionHeader('Labour');
+    rows += row('Shared labour cost', fmt(labourRate), `RM ${labour.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} total units`);
+
+    rows += sectionHeader('Utilities');
+    rows += row('Electric + Water (80%)', fmt(utilRate), `RM ${utilAlloc.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} units`);
+
+    if (gs > 0) {
+      rows += sectionHeader('Cooking Gas');
+      rows += row('Cooking gas', fmt(gsCPU), out > 0 ? `RM ${gs.toFixed(2)} ÷ ${out.toLocaleString()} units` : '');
+    }
+    if (tr > 0) {
+      rows += sectionHeader('Transport');
+      rows += row('Transport', fmt(trCPU), out > 0 ? `RM ${tr.toFixed(2)} ÷ ${out.toLocaleString()} units` : '');
+    }
+
+    rows += row('Total Cost / Unit', out > 0 ? `RM ${totalCPU.toFixed(4)}` : '—', '', true);
+
+  } else {
+    // FG
+    const fg = product;
+    const out = Number(document.getElementById(`fg-out-${code}`)?.value) || 0;
+    const rm  = Number(document.getElementById(`fg-rm-${code}`)?.value) || 0;
+    const pk  = Number(document.getElementById(`fg-pk-${code}`)?.value) || 0;
+    const tr  = Number(document.getElementById(`fg-tr-${code}`)?.value) || 0;
+
+    const rmCPU = out > 0 ? rm / out : 0;
+    const pkCPU = out > 0 ? pk / out : 0;
+    const trCPU = out > 0 ? tr / out : 0;
+
+    // Semi FG components
+    const sfCPU = {};
+    COSTING_SEMI_FG.forEach(sf => {
+      const sfOut  = Number(document.getElementById(`sf-out-${sf.code}`)?.value) || 0;
+      const sfPots = Number(document.getElementById(`sf-pots-${sf.code}`)?.value) || 0;
+      let sfRM;
+      if (document.getElementById(`sf-rm-auto-${sf.code}`)) {
+        sfRM = costingGetSFRawMatCost(sf.code, sfPots) ?? 0;
+      } else {
+        sfRM = Number(document.getElementById(`sf-rm-${sf.code}`)?.value) || 0;
+      }
+      const sfPk = Number(document.getElementById(`sf-pk-${sf.code}`)?.value) || 0;
+      const sfTr = Number(document.getElementById(`sf-tr-${sf.code}`)?.value) || 0;
+      const sfGs = Number(document.getElementById(`sf-gs-${sf.code}`)?.value) || 0;
+      sfCPU[sf.code] = sfOut > 0 ? (sfRM + sfPk + sfTr + sfGs) / sfOut : 0;
+    });
+    const sfTotalCPU = fg.semiFG.reduce((s, c) => s + (sfCPU[c] || 0), 0);
+
+    totalCPU = sfTotalCPU + rmCPU + pkCPU + trCPU + labourRate + utilRate + rentRate;
+
+    if (fg.semiFG.length) {
+      rows += sectionHeader('Semi FG Components');
+      fg.semiFG.forEach(sfCode => {
+        const sf = COSTING_SEMI_FG.find(x => x.code === sfCode);
+        rows += row(sf ? sf.name : sfCode, fmt(sfCPU[sfCode] || 0), `Semi FG cost/unit`);
+      });
+    }
+
+    rows += sectionHeader('Raw Materials');
+    rows += row('Raw material cost', fmt(rmCPU), out > 0 ? `RM ${rm.toFixed(2)} ÷ ${out.toLocaleString()} units` : 'No output entered');
+
+    rows += sectionHeader('Packaging');
+    rows += row('Packaging materials', fmt(pkCPU), out > 0 ? `RM ${pk.toFixed(2)} ÷ ${out.toLocaleString()} units` : '');
+
+    rows += sectionHeader('Labour');
+    rows += row('Shared labour cost', fmt(labourRate), `RM ${labour.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} total units`);
+
+    rows += sectionHeader('Utilities');
+    rows += row('Electric + Water (80%)', fmt(utilRate), `RM ${utilAlloc.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} units`);
+
+    rows += sectionHeader('Rental');
+    rows += row('Rental (75%)', fmt(rentRate), `RM ${rentAlloc.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} units`);
+
+    if (tr > 0) {
+      rows += sectionHeader('Transportation');
+      rows += row('Transport expenses', fmt(trCPU), out > 0 ? `RM ${tr.toFixed(2)} ÷ ${out.toLocaleString()} units` : '');
+    }
+
+    rows += row('Total Cost / Unit', out > 0 ? `RM ${totalCPU.toFixed(4)}` : '—', '', true);
+  }
+
+  const monthLabel = document.getElementById('costing-detail-title')?.textContent || '';
+  document.getElementById('cpv-content').innerHTML = `
+    <div class="card">
+      <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
+        <div class="card-title"><i class="ti ti-calculator" style="color:var(--accent);margin-right:6px"></i>Cost Breakdown — ${monthLabel}</div>
+        <div style="font-size:20px;font-weight:900;color:var(--success)">${totalCPU > 0 ? 'RM ' + totalCPU.toFixed(4) + ' / unit' : '—'}</div>
+      </div>
+      <div class="table-wrap">
+        <table style="width:100%">
+          <thead><tr>
+            <th style="width:70%">Cost Category</th>
+            <th style="text-align:right">RM / Unit</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
 async function costingSaveAll() {
