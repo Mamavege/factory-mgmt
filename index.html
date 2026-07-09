@@ -3028,6 +3028,11 @@ const COSTING_FG = [
 
 const MONTH_NAMES = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 let costingCurrentMonthId = null;
+let costingAutoSaveTimer = null;
+function costingScheduleAutoSave() {
+  clearTimeout(costingAutoSaveTimer);
+  costingAutoSaveTimer = setTimeout(() => costingSave(true), 1200);
+}
 let costingBOM = {};             // productCode → [{material_name, qty_per_pot, uom, yield_pct}]
 let costingEffectivePrices = {}; // material_name → {price, source, sourceLabel}
 let costingPurchaseRecords = []; // purchase records for current month
@@ -3417,7 +3422,7 @@ async function costingOpenMonth(id) {
          <div style="font-size:10px;color:var(--text-muted)">auto from BOM</div>
        </td>`;
     const manualCell = (manualId, savedVal) =>
-      `<td><input type="number" class="costing-input" id="${manualId}" value="${savedVal||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcSemiFGRow('${sf.code}');costingCalcResults()"></td>`;
+      `<td><input type="number" class="costing-input" id="${manualId}" value="${savedVal||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcSemiFGRow('${sf.code}');costingCalcResults();costingScheduleAutoSave()"></td>`;
 
     const rmCell = hasRmBOM ? autoCell(`sf-rm-auto-${sf.code}`, `sf-rm-${sf.code}`, d.raw_material_cost)
                             : manualCell(`sf-rm-${sf.code}`, d.raw_material_cost);
@@ -3431,11 +3436,11 @@ async function costingOpenMonth(id) {
     return `<tr>
       <td><span class="badge badge-purple">${sf.code}</span>${expandBtn}</td>
       <td style="white-space:nowrap;font-size:12px"><a href="#" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:3px" onclick="costingOpenProduct('semi','${sf.code}');event.preventDefault()">${sf.name}</a></td>
-      <td><input type="number" class="costing-input" id="sf-pots-${sf.code}" value="${d.pots||''}" placeholder="0" min="0" oninput="costingCalcSemiFGRow('${sf.code}');costingCalcResults()"></td>
-      <td><input type="number" class="costing-input" id="sf-out-${sf.code}" value="${d.output_units||''}" placeholder="0" min="0" oninput="costingCalcSemiFGRow('${sf.code}');costingCalcResults()"></td>
+      <td><input type="number" class="costing-input" id="sf-pots-${sf.code}" value="${d.pots||''}" placeholder="0" min="0" oninput="costingCalcSemiFGRow('${sf.code}');costingCalcResults();costingScheduleAutoSave()"></td>
+      <td><input type="number" class="costing-input" id="sf-out-${sf.code}" value="${d.output_units||''}" placeholder="0" min="0" oninput="costingCalcSemiFGRow('${sf.code}');costingCalcResults();costingScheduleAutoSave()"></td>
       ${rmCell}
       ${pkCell}
-      <td><input type="number" class="costing-input" id="sf-tr-${sf.code}" value="${d.transport_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcSemiFGRow('${sf.code}');costingCalcResults()"></td>
+      <td><input type="number" class="costing-input" id="sf-tr-${sf.code}" value="${d.transport_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcSemiFGRow('${sf.code}');costingCalcResults();costingScheduleAutoSave()"></td>
       ${gsCell}
       <td style="background:#f0fdf4;font-weight:700;white-space:nowrap" id="sf-cpu-${sf.code}">—</td>
     </tr>
@@ -3775,7 +3780,8 @@ function costingOpenProduct(type, code) {
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">${bottomCards}</div>`;
 }
 
-async function costingSaveAll() {
+async function costingSave(silent = false) { return costingSaveAll(silent); }
+async function costingSaveAll(silent = false) {
   if (!costingCurrentMonthId) return;
 
   const { error: mErr } = await sb.from('costing_months').update({
@@ -3815,7 +3821,7 @@ async function costingSaveAll() {
   const { error: fgErr } = await sb.from('costing_fg_entries').upsert(fgRows,{onConflict:'month_id,code'});
   if (fgErr) return toast('Error saving FG: '+fgErr.message,'error');
 
-  toast('Saved successfully');
+  if (!silent) toast('Saved successfully');
   costingCalcResults();
 }
 
