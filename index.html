@@ -1523,7 +1523,7 @@ const pageTitles = {
 };
 const pageActions = {
   workorders: () => currentProfile?.role==='admin' ? `<button class="btn btn-primary" style="width:auto" onclick="openWOModal()"><i class="ti ti-plus"></i> New Order</button>` : '',
-  inventory: () => currentProfile?.role==='admin' ? `<button class="btn btn-primary" style="width:auto" onclick="openInvModal()"><i class="ti ti-plus"></i> New Item</button>` : '',
+  inventory: () => currentProfile?.role==='admin' ? `<button class="btn btn-secondary" style="width:auto" onclick="recalcInventory()"><i class="ti ti-calculator"></i> Recalculate</button> <button class="btn btn-primary" style="width:auto" onclick="openInvModal()"><i class="ti ti-plus"></i> New Item</button>` : '',
   transactions: () => `<button class="btn btn-primary" style="width:auto" onclick="openTxModal()"><i class="ti ti-plus"></i> New Transaction</button>`,
   wip: () => '',
   costing: () => `<button class="btn btn-primary" style="width:auto" onclick="costingNewMonth()"><i class="ti ti-plus"></i> New Month</button>`,
@@ -1762,6 +1762,30 @@ async function updateWOStatus(id, current) {
 }
 
 // ─── INVENTORY ──────────────────────────────────────
+// Rebuild balances from opening_qty + all non-deleted transactions (admin, one click)
+async function recalcInventory() {
+  if (!confirm('Recalculate all balances from opening stock + transactions?')) return;
+  const { data: inv, error: e1 } = await sb.from('inventory').select('id,item_code,quantity,opening_qty');
+  if (e1) return toast('Load failed: '+e1.message,'error');
+  const { data: txs, error: e2 } = await sb.from('stock_transactions').select('item_id,type,quantity').is('deleted_at',null);
+  if (e2) return toast('Load failed: '+e2.message,'error');
+  const sum = {};
+  txs.forEach(t => {
+    if (!sum[t.item_id]) sum[t.item_id] = 0;
+    sum[t.item_id] += (t.type==='in'?1:-1) * (parseFloat(t.quantity)||0);
+  });
+  let fixed = 0;
+  for (const i of inv) {
+    if (i.opening_qty === null || i.opening_qty === undefined) continue;   // no opening set → skip
+    const expected = Math.round(((parseFloat(i.opening_qty)||0) + (sum[i.id]||0)) * 100) / 100;
+    if (Math.abs(expected - (parseFloat(i.quantity)||0)) > 0.001) {
+      const { error } = await sb.from('inventory').update({quantity:expected,updated_at:new Date().toISOString()}).eq('id',i.id);
+      if (!error) fixed++;
+    }
+  }
+  toast(fixed ? `${fixed} item(s) corrected` : 'All balances already match ✓');
+  loadInventory();
+}
 async function loadInventory() {
   const { data } = await sb.from('inventory').select('*').order('item_name');
   allInventory = data || [];
