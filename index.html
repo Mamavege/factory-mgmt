@@ -3866,19 +3866,28 @@ function costingOpenProduct(type, code) {
     const pkCPU = out > 0 ? pk / out : 0;
     const trCPU = out > 0 ? tr / out : 0;
     const gsCPU = out > 0 ? gs / out : 0;
-    totalCPU = rmCPU + pkCPU + trCPU + gsCPU + labourRate + utilRate;
+    totalCPU = rmCPU + pkCPU + trCPU + gsCPU;
 
     // Raw Materials card
     const bom = costingBOM[code] || [];
+    const sfDef = COSTING_SEMI_FG.find(s => s.code === code);
+    const isManualQty = sfDef?.manualBomQty;
+    const manualQtys = costingManualBomQty[code] || {};
     let rmRows = '';
     if (bom.length) {
-      bom.forEach(b => {
-        const yld = costingGetEffectiveYield(b.material_name, b.yield_pct || 100);
+      bom.filter(b => b.category === 'raw_material').forEach(b => {
         const ep = costingEffectivePrices[b.material_name] || { price: 0 };
-        const matCost = pots > 0 ? (b.qty_per_pot / (yld/100)) * pots * ep.price : 0;
-        const matCPU  = out > 0 ? matCost / out : 0;
-        const yldNote = YIELD_RATE_MATERIALS.includes(b.material_name) ? ` <span style="color:var(--accent);font-size:10px">(avg)</span>` : '';
-        rmRows += tRow(b.material_name, matCPU, `${b.qty_per_pot} ${b.uom}/pot, yield ${yld.toFixed(1)}%${yldNote ? ' ★avg' : ''}, RM ${ep.price.toFixed(4)}/${b.uom}`);
+        let matCPU = 0;
+        if (isManualQty) {
+          const qty = Number(manualQtys[b.id]) || 0;
+          matCPU = out > 0 ? qty * ep.price / out : 0;
+          rmRows += tRow(b.material_name, matCPU, `${qty} ${b.uom} used, RM ${ep.price.toFixed(4)}/${b.uom}`);
+        } else {
+          const yld = costingGetEffectiveYield(b.material_name, b.yield_pct || 100);
+          const matCost = pots > 0 ? (b.qty_per_pot / (yld/100)) * pots * ep.price : 0;
+          matCPU = out > 0 ? matCost / out : 0;
+          rmRows += tRow(b.material_name, matCPU, `${b.qty_per_pot} ${b.uom}/pot, yield ${yld.toFixed(1)}%, RM ${ep.price.toFixed(4)}/${b.uom}`);
+        }
       });
     } else {
       rmRows += tRow('Raw material (manual)', rmCPU, 'No BOM — entered manually');
@@ -3888,9 +3897,7 @@ function costingOpenProduct(type, code) {
     // Packaging card
     topCards += miniCard('<i class="ti ti-package" style="margin-right:4px"></i>Packaging', tRow('Packaging materials', pkCPU, out > 0 ? `RM ${pk.toFixed(2)} ÷ ${out.toLocaleString()} units` : ''), pkCPU);
 
-    // Other cards below
-    bottomCards += miniCard('<i class="ti ti-users" style="margin-right:4px"></i>Labour', tRow('Shared labour', labourRate, `RM ${labour.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} total units`), labourRate);
-    bottomCards += miniCard('<i class="ti ti-bolt" style="margin-right:4px"></i>Utilities', tRow('Electric + Water (80%)', utilRate, `RM ${utilAlloc.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} units`), utilRate);
+    // Other cost cards (no labour/utilities — those are allocated at FG level)
     if (gs > 0) bottomCards += miniCard('<i class="ti ti-flame" style="margin-right:4px"></i>Cooking Gas', tRow('Cooking gas', gsCPU, `RM ${gs.toFixed(2)} ÷ ${out.toLocaleString()} units`), gsCPU);
     if (tr > 0) bottomCards += miniCard('<i class="ti ti-truck" style="margin-right:4px"></i>Transport', tRow('Transport', trCPU, `RM ${tr.toFixed(2)} ÷ ${out.toLocaleString()} units`), trCPU);
 
