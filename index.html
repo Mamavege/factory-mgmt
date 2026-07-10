@@ -3578,11 +3578,12 @@ function costingRenderSFBOMDetail(code) {
   const pots = Number(document.getElementById(`sf-pots-${code}`)?.value)||0;
 
   const rows = bom.map(b => {
-    const purchaseQty = (Number(b.qty_per_pot)||0) / ((Number(b.yield_pct)||100)/100);
+    const yld = costingGetEffectiveYield(b.material_name, Number(b.yield_pct)||100);
+    const purchaseQty = (Number(b.qty_per_pot)||0) / (yld/100);
     const ep = costingEffectivePrices[b.material_name] || {price:0, source:'missing', sourceLabel:'No price'};
     const lineCost = purchaseQty * ep.price * pots;
     const srcColor = ep.source==='this_month'?'var(--success)':ep.source==='fallback'?'#f59e0b':'var(--danger)';
-    const yieldNote = Number(b.yield_pct)<100 ? ` <span style="color:var(--text-muted)">(net ${b.qty_per_pot} ${b.uom}, yield ${b.yield_pct}%)</span>` : '';
+    const yieldNote = yld < 100 ? ` <span style="color:var(--text-muted)">(usable ${b.qty_per_pot} ${b.uom}, yield ${yld.toFixed(1)}%)</span>` : '';
     return `<tr style="border-top:1px solid var(--border)">
       <td style="padding:4px 8px">${b.material_name}${yieldNote}</td>
       <td style="padding:4px 8px;text-align:right">${purchaseQty.toFixed(4)} ${b.uom}/pot × ${pots} pots = ${(purchaseQty*pots).toFixed(4)} ${b.uom}</td>
@@ -3591,7 +3592,8 @@ function costingRenderSFBOMDetail(code) {
     </tr>`;
   }).join('');
   const total = bom.reduce((s,b) => {
-    const pq = (Number(b.qty_per_pot)||0)/((Number(b.yield_pct)||100)/100);
+    const yld = costingGetEffectiveYield(b.material_name, Number(b.yield_pct)||100);
+    const pq = (Number(b.qty_per_pot)||0)/(yld/100);
     return s + pq * (costingEffectivePrices[b.material_name]?.price||0) * pots;
   }, 0);
   el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:11px">
