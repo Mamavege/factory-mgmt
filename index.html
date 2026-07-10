@@ -897,7 +897,7 @@
             <div class="card-header">
               <div class="card-title"><i class="ti ti-plant" style="color:var(--accent);margin-right:6px"></i>Yield Rates</div>
             </div>
-            <div style="padding:14px 20px 4px;font-size:12px;color:var(--text-muted)">Enter measured yield % for each material this month. Add multiple readings — the average will be used in BOM cost calculations.</div>
+            <div style="padding:14px 20px 4px;font-size:12px;color:var(--text-muted)">BOM quantities are <strong>actual usable amounts</strong>. Enter yield % to calculate how much to purchase. e.g. Lemongrass 60% → need to buy 1.667 KG to use 1 KG.</div>
             <div style="padding:12px 20px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px" id="yield-rate-grid">
               <!-- rendered by costingRenderYieldRates() -->
             </div>
@@ -3045,58 +3045,44 @@ function costingScheduleAutoSave() {
   clearTimeout(costingAutoSaveTimer);
   costingAutoSaveTimer = setTimeout(() => costingSave(true), 1200);
 }
-// material_name → array of yield % readings entered this month
-const YIELD_RATE_MATERIALS = ['Lemongrass','Galangal','Kaffir Lime Leave','Hot Chillies'];
-let costingYieldReadings = {}; // materialName → [number, ...]
+// Yield rates for materials with significant trim/waste loss
+// BOM qty_per_pot = actual usable qty; purchase qty = usable qty ÷ (yield% / 100)
+const YIELD_RATE_MATERIALS = [
+  { name: 'Lemongrass',       id: 'yr-lemongrass',  default: 60 },
+  { name: 'Galangal',         id: 'yr-galangal',    default: 70 },
+  { name: 'Kaffir Lime Leave',id: 'yr-kaffir',      default: 100 },
+  { name: 'Hot Chillies',     id: 'yr-hotchillies', default: 90  },
+];
+let costingYieldReadings = {}; // kept for DB compat (stores simple {name: pct})
 
 function costingGetEffectiveYield(materialName, bomYieldPct) {
-  const readings = costingYieldReadings[materialName];
-  if (readings && readings.length > 0) {
-    return readings.reduce((a,b) => a+b, 0) / readings.length;
-  }
-  return bomYieldPct; // fall back to BOM stored value
+  const entry = YIELD_RATE_MATERIALS.find(m => m.name === materialName);
+  if (!entry) return bomYieldPct;
+  const val = Number(document.getElementById(entry.id)?.value);
+  return val > 0 ? val : bomYieldPct;
 }
 
 function costingRenderYieldRates() {
   const grid = document.getElementById('yield-rate-grid');
   if (!grid) return;
-  grid.innerHTML = YIELD_RATE_MATERIALS.map(mat => {
-    const readings = costingYieldReadings[mat] || [];
-    const avg = readings.length ? (readings.reduce((a,b)=>a+b,0)/readings.length).toFixed(1) : '—';
-    const rows = readings.map((r,i) =>
-      `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-        <input type="number" value="${r}" min="0" max="100" step="0.1" style="width:70px;padding:3px 6px;font-size:12px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text)"
-          onchange="costingYieldReadings['${mat}'][${i}]=Number(this.value);costingRenderYieldRates();costingCalcResults();costingScheduleAutoSave()">
-        <span style="font-size:11px;color:var(--text-muted)">%</span>
-        <button onclick="costingYieldReadings['${mat}'].splice(${i},1);costingRenderYieldRates();costingCalcResults();costingScheduleAutoSave()"
-          style="border:none;background:none;cursor:pointer;color:var(--danger);font-size:13px;padding:0;line-height:1"><i class="ti ti-x"></i></button>
-       </div>`).join('');
-    return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:12px">
-      <div style="font-weight:700;font-size:13px;margin-bottom:8px">${mat}</div>
-      ${rows}
-      <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-        <input type="number" id="yr-new-${mat.replace(/\s/g,'-')}" placeholder="e.g. 60" min="0" max="100" step="0.1"
-          style="width:70px;padding:3px 6px;font-size:12px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text)"
-          onkeydown="if(event.key==='Enter'){costingAddYieldReading('${mat}');event.preventDefault()}">
-        <span style="font-size:11px;color:var(--text-muted)">%</span>
-        <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px" onclick="costingAddYieldReading('${mat}')"><i class="ti ti-plus"></i></button>
+  grid.innerHTML = YIELD_RATE_MATERIALS.map(m => {
+    const saved = costingYieldReadings[m.name];
+    const val = saved ?? m.default;
+    const purchaseExample = val > 0 ? (1 / (val/100)).toFixed(4) : '—';
+    return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:14px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:10px">${m.name}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="number" id="${m.id}" value="${val}" min="1" max="100" step="0.1" class="costing-input"
+          style="width:80px;font-size:15px;font-weight:700;padding:6px 10px;text-align:center"
+          oninput="const v=Number(this.value);costingYieldReadings['${m.name}']=v;const fac=v>0?(1/(v/100)).toFixed(4):'—';['yr-factor-${m.id}','yr-factor2-${m.id}'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=fac+(id.includes('factor-')?'×':'');});costingCalcResults();costingScheduleAutoSave()">
+        <span style="font-size:16px;font-weight:700;color:var(--text-muted)">%</span>
       </div>
-      <div style="margin-top:8px;font-size:12px;color:var(--accent);font-weight:700">
-        Avg: ${avg}${readings.length ? '%' : ''} <span style="color:var(--text-muted);font-weight:400">(${readings.length} reading${readings.length!==1?'s':''})</span>
+      <div style="margin-top:8px;font-size:11px;color:var(--text-muted)">
+        Purchase factor: <strong id="yr-factor-${m.id}" style="color:var(--accent)">${purchaseExample}×</strong>
+        <span style="margin-left:4px">(buy <span id="yr-factor2-${m.id}">${purchaseExample}</span> KG to use 1 KG)</span>
       </div>
     </div>`;
   }).join('');
-}
-
-function costingAddYieldReading(mat) {
-  const inp = document.getElementById('yr-new-'+mat.replace(/\s/g,'-'));
-  const val = Number(inp?.value);
-  if (!(val > 0)) return;
-  if (!costingYieldReadings[mat]) costingYieldReadings[mat] = [];
-  costingYieldReadings[mat].push(val);
-  costingRenderYieldRates();
-  costingCalcResults();
-  costingScheduleAutoSave();
 }
 
 let costingBOM = {};             // productCode → [{material_name, qty_per_pot, uom, yield_pct}]
@@ -3505,7 +3491,7 @@ async function costingOpenMonth(id) {
   document.getElementById('cm-water').value          = month.total_water_cost || '';
   document.getElementById('cm-rental').value         = month.total_rental_cost || '';
 
-  costingYieldReadings = month.yield_readings ? JSON.parse(month.yield_readings) : {};
+  try { costingYieldReadings = month.yield_readings ? JSON.parse(month.yield_readings) : {}; } catch(e) { costingYieldReadings = {}; }
   costingRenderPurchaseRecords();
   costingRenderEffectivePrices();
   costingRenderYieldRates();
