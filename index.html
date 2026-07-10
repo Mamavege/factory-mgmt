@@ -3222,16 +3222,14 @@ function costingGetSFRawMatCost(code, pots) {
   return costingGetSFBOMCost(code, pots, 'raw_material');
 }
 
-const PURCHASE_PREVIEW_COUNT = 5;
-function costingRenderPurchaseRecords(showAll = false) {
+function costingRenderPurchaseRecords() {
   const el = document.getElementById('costing-purchase-list');
   if (!el) return;
   if (!costingPurchaseRecords.length) {
     el.innerHTML = '<div style="text-align:center;padding:14px;color:var(--text-muted);font-size:13px"><i class="ti ti-receipt" style="font-size:18px;display:block;margin-bottom:4px"></i>No purchase records for this month yet. Click "Add Purchase Record" to start.</div>';
     return;
   }
-  const visible = showAll ? costingPurchaseRecords : costingPurchaseRecords.slice(0, PURCHASE_PREVIEW_COUNT);
-  const rows = visible.map(r => {
+  const rows = costingPurchaseRecords.map(r => {
     const qty = Number(r.qty_purchased);
     const unitPrice = Number(r.unit_price);
     const total = qty * unitPrice;
@@ -3245,15 +3243,8 @@ function costingRenderPurchaseRecords(showAll = false) {
     <td style="padding:6px 10px;text-align:right;color:var(--text-muted);font-size:11px">RM ${unitPrice.toFixed(4)}/${uom}</td>
     <td style="padding:6px 10px"><button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:11px" onclick="costingDeletePurchaseRecord('${r.id}')"><i class="ti ti-trash"></i></button></td>
   </tr>`;}).join('');
-  const remaining = costingPurchaseRecords.length - PURCHASE_PREVIEW_COUNT;
-  const toggleBtn = costingPurchaseRecords.length > PURCHASE_PREVIEW_COUNT
-    ? `<div style="text-align:center;padding:8px;border-top:1px solid var(--border)">
-        <button class="btn btn-secondary btn-sm" onclick="costingRenderPurchaseRecords(${!showAll})">
-          ${showAll ? '<i class="ti ti-chevron-up"></i> Show less' : `<i class="ti ti-chevron-down"></i> Show ${remaining} more`}
-        </button>
-       </div>` : '';
-  el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
-    <thead><tr style="background:var(--bg)">
+  el.innerHTML = `<div style="max-height:220px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead style="position:sticky;top:0;z-index:1;background:var(--bg)"><tr>
       <th style="padding:6px 10px;text-align:left">Material</th>
       <th style="padding:6px 10px;text-align:left">Supplier</th>
       <th style="padding:6px 10px;text-align:right">Total Qty</th>
@@ -3261,7 +3252,7 @@ function costingRenderPurchaseRecords(showAll = false) {
       <th style="padding:6px 10px;text-align:right">Total Price</th>
       <th style="padding:6px 10px;text-align:right">Unit Price (auto)</th>
       <th style="padding:6px 10px"></th>
-    </tr></thead><tbody>${rows}</tbody></table>${toggleBtn}`;
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function costingRenderEffectivePrices() {
