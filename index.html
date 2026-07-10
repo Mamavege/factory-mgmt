@@ -892,6 +892,17 @@
             <input type="hidden" id="cm-prod-pct" value="80">
           </div>
 
+          <!-- Yield Rates -->
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-plant" style="color:var(--accent);margin-right:6px"></i>Yield Rates</div>
+            </div>
+            <div style="padding:14px 20px 4px;font-size:12px;color:var(--text-muted)">Enter measured yield % for each material this month. Add multiple readings — the average will be used in BOM cost calculations.</div>
+            <div style="padding:12px 20px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px" id="yield-rate-grid">
+              <!-- rendered by costingRenderYieldRates() -->
+            </div>
+          </div>
+
           <!-- Semi FG Costs -->
           <div class="card" style="margin-bottom:16px">
             <div class="card-header"><div class="card-title"><i class="ti ti-stack" style="color:var(--accent);margin-right:6px"></i>Semi FG Costs</div></div>
@@ -3034,6 +3045,60 @@ function costingScheduleAutoSave() {
   clearTimeout(costingAutoSaveTimer);
   costingAutoSaveTimer = setTimeout(() => costingSave(true), 1200);
 }
+// material_name → array of yield % readings entered this month
+const YIELD_RATE_MATERIALS = ['Lemongrass','Galangal','Kaffir Lime Leave','Hot Chillies'];
+let costingYieldReadings = {}; // materialName → [number, ...]
+
+function costingGetEffectiveYield(materialName, bomYieldPct) {
+  const readings = costingYieldReadings[materialName];
+  if (readings && readings.length > 0) {
+    return readings.reduce((a,b) => a+b, 0) / readings.length;
+  }
+  return bomYieldPct; // fall back to BOM stored value
+}
+
+function costingRenderYieldRates() {
+  const grid = document.getElementById('yield-rate-grid');
+  if (!grid) return;
+  grid.innerHTML = YIELD_RATE_MATERIALS.map(mat => {
+    const readings = costingYieldReadings[mat] || [];
+    const avg = readings.length ? (readings.reduce((a,b)=>a+b,0)/readings.length).toFixed(1) : '—';
+    const rows = readings.map((r,i) =>
+      `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+        <input type="number" value="${r}" min="0" max="100" step="0.1" style="width:70px;padding:3px 6px;font-size:12px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text)"
+          onchange="costingYieldReadings['${mat}'][${i}]=Number(this.value);costingRenderYieldRates();costingCalcResults();costingScheduleAutoSave()">
+        <span style="font-size:11px;color:var(--text-muted)">%</span>
+        <button onclick="costingYieldReadings['${mat}'].splice(${i},1);costingRenderYieldRates();costingCalcResults();costingScheduleAutoSave()"
+          style="border:none;background:none;cursor:pointer;color:var(--danger);font-size:13px;padding:0;line-height:1"><i class="ti ti-x"></i></button>
+       </div>`).join('');
+    return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:12px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">${mat}</div>
+      ${rows}
+      <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+        <input type="number" id="yr-new-${mat.replace(/\s/g,'-')}" placeholder="e.g. 60" min="0" max="100" step="0.1"
+          style="width:70px;padding:3px 6px;font-size:12px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text)"
+          onkeydown="if(event.key==='Enter'){costingAddYieldReading('${mat}');event.preventDefault()}">
+        <span style="font-size:11px;color:var(--text-muted)">%</span>
+        <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px" onclick="costingAddYieldReading('${mat}')"><i class="ti ti-plus"></i></button>
+      </div>
+      <div style="margin-top:8px;font-size:12px;color:var(--accent);font-weight:700">
+        Avg: ${avg}${readings.length ? '%' : ''} <span style="color:var(--text-muted);font-weight:400">(${readings.length} reading${readings.length!==1?'s':''})</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function costingAddYieldReading(mat) {
+  const inp = document.getElementById('yr-new-'+mat.replace(/\s/g,'-'));
+  const val = Number(inp?.value);
+  if (!(val > 0)) return;
+  if (!costingYieldReadings[mat]) costingYieldReadings[mat] = [];
+  costingYieldReadings[mat].push(val);
+  costingRenderYieldRates();
+  costingCalcResults();
+  costingScheduleAutoSave();
+}
+
 let costingBOM = {};             // productCode → [{material_name, qty_per_pot, uom, yield_pct}]
 let costingEffectivePrices = {}; // material_name → {price, source, sourceLabel}
 let costingPurchaseRecords = []; // purchase records for current month
@@ -3214,7 +3279,8 @@ function costingGetSFBOMCost(code, pots, category) {
   const items = bom.filter(b => b.category === category);
   if (!items.length) return null;
   return items.reduce((total, b) => {
-    const purchaseQty = (Number(b.qty_per_pot)||0) / ((Number(b.yield_pct)||100) / 100);
+    const yld = costingGetEffectiveYield(b.material_name, Number(b.yield_pct)||100);
+    const purchaseQty = (Number(b.qty_per_pot)||0) / (yld / 100);
     return total + purchaseQty * (costingEffectivePrices[b.material_name]?.price||0) * pots;
   }, 0);
 }
@@ -3439,8 +3505,10 @@ async function costingOpenMonth(id) {
   document.getElementById('cm-water').value          = month.total_water_cost || '';
   document.getElementById('cm-rental').value         = month.total_rental_cost || '';
 
+  costingYieldReadings = month.yield_readings ? JSON.parse(month.yield_readings) : {};
   costingRenderPurchaseRecords();
   costingRenderEffectivePrices();
+  costingRenderYieldRates();
 
   const sfMap = {}, fgMap = {};
   (sfData||[]).forEach(r => sfMap[r.code] = r);
@@ -3746,11 +3814,12 @@ function costingOpenProduct(type, code) {
     let rmRows = '';
     if (bom.length) {
       bom.forEach(b => {
-        const yld = b.yield_pct || 100;
+        const yld = costingGetEffectiveYield(b.material_name, b.yield_pct || 100);
         const ep = costingEffectivePrices[b.material_name] || { price: 0 };
         const matCost = pots > 0 ? (b.qty_per_pot / (yld/100)) * pots * ep.price : 0;
         const matCPU  = out > 0 ? matCost / out : 0;
-        rmRows += tRow(b.material_name, matCPU, `${b.qty_per_pot} ${b.uom}/pot, yield ${yld.toFixed(0)}%, RM ${ep.price.toFixed(4)}/${b.uom}`);
+        const yldNote = YIELD_RATE_MATERIALS.includes(b.material_name) ? ` <span style="color:var(--accent);font-size:10px">(avg)</span>` : '';
+        rmRows += tRow(b.material_name, matCPU, `${b.qty_per_pot} ${b.uom}/pot, yield ${yld.toFixed(1)}%${yldNote ? ' ★avg' : ''}, RM ${ep.price.toFixed(4)}/${b.uom}`);
       });
     } else {
       rmRows += tRow('Raw material (manual)', rmCPU, 'No BOM — entered manually');
@@ -3829,6 +3898,7 @@ async function costingSaveAll(silent = false) {
     total_electric_cost: Number(document.getElementById('cm-electric').value)||0,
     total_water_cost:    Number(document.getElementById('cm-water').value)||0,
     total_rental_cost:   Number(document.getElementById('cm-rental').value)||0,
+    yield_readings:      JSON.stringify(costingYieldReadings),
   }).eq('id', costingCurrentMonthId);
   if (mErr) return toast('Error saving shared costs: '+mErr.message,'error');
 
