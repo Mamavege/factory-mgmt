@@ -3285,6 +3285,16 @@ function costingGetSFRawMatCost(code, pots) {
   return costingGetSFBOMCost(code, pots, 'raw_material');
 }
 
+function costingGetFGBOMCost(code, outputUnits, category) {
+  const bom = costingBOM[code];
+  if (!bom || !bom.length || !outputUnits) return null;
+  const items = bom.filter(b => b.category === category);
+  if (!items.length) return null;
+  return items.reduce((total, b) => {
+    return total + (Number(b.qty_per_pot)||0) * (costingEffectivePrices[b.material_name]?.price||0) * outputUnits;
+  }, 0);
+}
+
 function costingRenderPurchaseRecords() {
   const el = document.getElementById('costing-purchase-list');
   if (!el) return;
@@ -3561,13 +3571,18 @@ async function costingOpenMonth(id) {
   document.getElementById('costing-fg-tbody').innerHTML = COSTING_FG.map(fg => {
     const d = fgMap[fg.code] || {};
     const sfBadges = fg.semiFG.map(c=>`<span class="badge badge-gray" style="font-size:10px;margin:1px">${c}</span>`).join('');
+    const fgBom = costingBOM[fg.code] || [];
+    const hasFgPkBOM = fgBom.some(b => b.category === 'packaging');
+    const pkCell = hasFgPkBOM
+      ? `<td style="min-width:110px"><div style="font-weight:700;color:var(--accent)" id="fg-pk-auto-${fg.code}">—</div><div style="font-size:10px;color:var(--text-muted)">auto from BOM</div></td>`
+      : `<td><input type="number" class="costing-input" id="fg-pk-${fg.code}" value="${d.packaging_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcResults()"></td>`;
     return `<tr>
       <td style="white-space:nowrap"><span class="badge badge-info">${fg.code}</span>${fg.outsourced?` <span class="badge badge-warning" style="font-size:10px">Outsourced</span>`:''}</td>
       <td style="font-size:12px;min-width:180px"><a href="#" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:3px" onclick="costingOpenProduct('fg','${fg.code}');event.preventDefault()">${fg.name}</a></td>
       <td style="max-width:160px">${sfBadges||'<span style="color:var(--text-muted);font-size:11px">—</span>'}</td>
       <td><input type="number" class="costing-input" id="fg-out-${fg.code}" value="${d.output_units||''}" placeholder="0" min="0" oninput="costingCalcResults()"></td>
       <td><input type="number" class="costing-input" id="fg-rm-${fg.code}"  value="${d.raw_material_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcResults()"></td>
-      <td><input type="number" class="costing-input" id="fg-pk-${fg.code}"  value="${d.packaging_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcResults()"></td>
+      ${pkCell}
       <td><input type="number" class="costing-input" id="fg-tr-${fg.code}"  value="${d.transport_cost||''}" placeholder="0.00" step="0.01" min="0"${!fg.outsourced?' title="Transport mainly for outsourced products"':''}></td>
     </tr>`;
   }).join('');
@@ -3751,7 +3766,16 @@ function costingCalcResults() {
   tbody.innerHTML = COSTING_FG.map(fg => {
     const out   = Number(document.getElementById(`fg-out-${fg.code}`)?.value)||0;
     const rm    = Number(document.getElementById(`fg-rm-${fg.code}`)?.value)||0;
-    const pk    = Number(document.getElementById(`fg-pk-${fg.code}`)?.value)||0;
+    const fgBom = costingBOM[fg.code] || [];
+    const hasFgPkBOM = fgBom.some(b => b.category === 'packaging');
+    let pk;
+    if (hasFgPkBOM) {
+      pk = costingGetFGBOMCost(fg.code, out, 'packaging') ?? 0;
+      const autoEl = document.getElementById(`fg-pk-auto-${fg.code}`);
+      if (autoEl) autoEl.textContent = out > 0 ? `RM ${pk.toFixed(4)}` : '—';
+    } else {
+      pk = Number(document.getElementById(`fg-pk-${fg.code}`)?.value)||0;
+    }
     const tr    = Number(document.getElementById(`fg-tr-${fg.code}`)?.value)||0;
     const sfCost   = fg.semiFG.reduce((s,c)=>s+(sfCPU[c]||0),0);
     const rmCPU    = out>0 ? rm/out : 0;
@@ -3905,7 +3929,11 @@ function costingOpenProduct(type, code) {
     const fg = product;
     const out = Number(document.getElementById(`fg-out-${code}`)?.value) || 0;
     const rm  = Number(document.getElementById(`fg-rm-${code}`)?.value) || 0;
-    const pk  = Number(document.getElementById(`fg-pk-${code}`)?.value) || 0;
+    const fgBomPk = costingBOM[code] || [];
+    const hasFgPkBOM = fgBomPk.some(b => b.category === 'packaging');
+    const pk  = hasFgPkBOM
+      ? (costingGetFGBOMCost(code, out, 'packaging') ?? 0)
+      : Number(document.getElementById(`fg-pk-${code}`)?.value) || 0;
     const tr  = Number(document.getElementById(`fg-tr-${code}`)?.value) || 0;
     const rmCPU = out > 0 ? rm / out : 0;
     const pkCPU = out > 0 ? pk / out : 0;
@@ -3928,7 +3956,19 @@ function costingOpenProduct(type, code) {
     topCards += miniCard('<i class="ti ti-plant-2" style="margin-right:4px"></i>Raw Materials', tRow('Raw material cost', rmCPU, out > 0 ? `RM ${rm.toFixed(2)} ÷ ${out.toLocaleString()} units` : 'No output entered'), rmCPU);
 
     // Packaging card
-    topCards += miniCard('<i class="ti ti-package" style="margin-right:4px"></i>Packaging', tRow('Packaging materials', pkCPU, out > 0 ? `RM ${pk.toFixed(2)} ÷ ${out.toLocaleString()} units` : ''), pkCPU);
+    const fgBomItems = (costingBOM[fg.code] || []).filter(b => b.category === 'packaging');
+    let pkRows = '';
+    if (fgBomItems.length) {
+      fgBomItems.forEach(b => {
+        const ep = costingEffectivePrices[b.material_name] || { price: 0 };
+        const lineCost = (Number(b.qty_per_pot)||0) * ep.price * out;
+        const lineCPU  = out > 0 ? lineCost / out : 0;
+        pkRows += tRow(b.material_name, lineCPU, `${b.qty_per_pot} ${b.uom}/unit, RM ${ep.price.toFixed(4)}/${b.uom}`);
+      });
+    } else {
+      pkRows = tRow('Packaging materials', pkCPU, out > 0 ? `RM ${pk.toFixed(2)} ÷ ${out.toLocaleString()} units` : '');
+    }
+    topCards += miniCard('<i class="ti ti-package" style="margin-right:4px"></i>Packaging', pkRows, pkCPU);
 
     // Bottom cards
     if (fg.semiFG.length) {
@@ -3987,14 +4027,22 @@ async function costingSaveAll(silent = false) {
   const { error: sfErr } = await sb.from('costing_semi_fg_entries').upsert(sfRows,{onConflict:'month_id,code'});
   if (sfErr) return toast('Error saving Semi FG: '+sfErr.message,'error');
 
-  const fgRows = COSTING_FG.map(fg=>({
-    month_id: costingCurrentMonthId, code: fg.code,
-    output_units:      Number(document.getElementById(`fg-out-${fg.code}`)?.value)||0,
-    raw_material_cost: Number(document.getElementById(`fg-rm-${fg.code}`)?.value)||0,
-    packaging_cost:    Number(document.getElementById(`fg-pk-${fg.code}`)?.value)||0,
-    transport_cost:    Number(document.getElementById(`fg-tr-${fg.code}`)?.value)||0,
-    cost_per_unit:     costingFGCostPerUnit[fg.code] || 0,
-  }));
+  const fgRows = COSTING_FG.map(fg => {
+    const fgOut = Number(document.getElementById(`fg-out-${fg.code}`)?.value)||0;
+    const fgBom = costingBOM[fg.code] || [];
+    const hasFgPkBOM = fgBom.some(b => b.category === 'packaging');
+    const fgPk = hasFgPkBOM
+      ? (costingGetFGBOMCost(fg.code, fgOut, 'packaging') ?? 0)
+      : Number(document.getElementById(`fg-pk-${fg.code}`)?.value)||0;
+    return {
+      month_id: costingCurrentMonthId, code: fg.code,
+      output_units:      fgOut,
+      raw_material_cost: Number(document.getElementById(`fg-rm-${fg.code}`)?.value)||0,
+      packaging_cost:    fgPk,
+      transport_cost:    Number(document.getElementById(`fg-tr-${fg.code}`)?.value)||0,
+      cost_per_unit:     costingFGCostPerUnit[fg.code] || 0,
+    };
+  });
   const { error: fgErr } = await sb.from('costing_fg_entries').upsert(fgRows,{onConflict:'month_id,code'});
   if (fgErr) return toast('Error saving FG: '+fgErr.message,'error');
 
