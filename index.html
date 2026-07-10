@@ -957,10 +957,11 @@
 
 <!-- MODALS -->
 
-<!-- Costing: Add Purchase Record Modal -->
+<!-- Costing: Add/Edit Purchase Record Modal -->
 <div class="modal-overlay" id="modal-costing-price">
   <div class="modal" style="max-width:480px">
-    <h2>Add Purchase Record</h2>
+    <h2 id="cp-modal-title">Add Purchase Record</h2>
+    <input type="hidden" id="cp-edit-id">
     <div class="form-group">
       <label>Category</label>
       <div style="display:flex;gap:8px">
@@ -998,7 +999,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-costing-price')">Cancel</button>
-      <button class="btn btn-primary" style="width:auto" onclick="costingSavePurchaseRecord()"><i class="ti ti-check"></i> Add</button>
+      <button class="btn btn-primary" style="width:auto" id="cp-save-btn" onclick="costingSavePurchaseRecord()"><i class="ti ti-check"></i> Add</button>
     </div>
   </div>
 </div>
@@ -3241,7 +3242,10 @@ function costingRenderPurchaseRecords() {
     <td style="padding:6px 10px">${uom}</td>
     <td style="padding:6px 10px;text-align:right">RM ${total.toFixed(2)}</td>
     <td style="padding:6px 10px;text-align:right;color:var(--text-muted);font-size:11px">RM ${unitPrice.toFixed(4)}/${uom}</td>
-    <td style="padding:6px 10px"><button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:11px" onclick="costingDeletePurchaseRecord('${r.id}')"><i class="ti ti-trash"></i></button></td>
+    <td style="padding:6px 10px;white-space:nowrap;display:flex;gap:4px">
+      <button class="btn btn-secondary btn-sm" style="padding:2px 7px;font-size:11px" onclick="costingEditPurchaseRecord('${r.id}')"><i class="ti ti-pencil"></i></button>
+      <button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:11px" onclick="costingDeletePurchaseRecord('${r.id}')"><i class="ti ti-trash"></i></button>
+    </td>
   </tr>`;}).join('');
   el.innerHTML = `<div style="max-height:220px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead style="position:sticky;top:0;z-index:1;background:var(--bg)"><tr>
@@ -3325,6 +3329,9 @@ function costingSelectMaterial(id, name, uom) {
 
 function costingShowAddPriceModal() {
   if (!costingAllMaterials.length) return toast('Materials not loaded', 'error');
+  document.getElementById('cp-edit-id').value = '';
+  document.getElementById('cp-modal-title').textContent = 'Add Purchase Record';
+  document.getElementById('cp-save-btn').innerHTML = '<i class="ti ti-check"></i> Add';
   document.getElementById('cp-supplier').value = '';
   document.getElementById('cp-qty').value = '';
   document.getElementById('cp-price').value = '';
@@ -3337,6 +3344,7 @@ function costingShowAddPriceModal() {
 }
 
 async function costingSavePurchaseRecord() {
+  const editId = document.getElementById('cp-edit-id').value;
   const material_id = document.getElementById('cp-material').value;
   const supplier = document.getElementById('cp-supplier').value.trim();
   const qty = Number(document.getElementById('cp-qty').value);
@@ -3348,19 +3356,50 @@ async function costingSavePurchaseRecord() {
 
   const unit_price = totalPrice / qty;
 
-  const { data, error } = await sb.from('costing_purchase_records').insert({
-    month_id: costingCurrentMonthId, material_id, supplier, qty_purchased: qty, unit_price
-  }).select('*, costing_materials(name, uom)').single();
-  if (error) return toast('Error: '+error.message,'error');
+  if (editId) {
+    const { data, error } = await sb.from('costing_purchase_records').update({
+      material_id, supplier, qty_purchased: qty, unit_price
+    }).eq('id', editId).select('*, costing_materials(name, uom)').single();
+    if (error) return toast('Error: '+error.message,'error');
+    costingPurchaseRecords = costingPurchaseRecords.map(r => r.id === editId ? data : r);
+    toast('Purchase record updated');
+  } else {
+    const { data, error } = await sb.from('costing_purchase_records').insert({
+      month_id: costingCurrentMonthId, material_id, supplier, qty_purchased: qty, unit_price
+    }).select('*, costing_materials(name, uom)').single();
+    if (error) return toast('Error: '+error.message,'error');
+    costingPurchaseRecords.push(data);
+    toast('Purchase record added');
+  }
 
-  costingPurchaseRecords.push(data);
   await costingLoadPrices(costingCurrentMonthId);
   costingRenderPurchaseRecords();
   costingRenderEffectivePrices();
   COSTING_SEMI_FG.forEach(sf => costingCalcSemiFGRow(sf.code));
   costingCalcResults();
   closeModal('modal-costing-price');
-  toast('Purchase record added');
+}
+
+function costingEditPurchaseRecord(id) {
+  const r = costingPurchaseRecords.find(x => x.id === id);
+  if (!r) return;
+  if (!costingAllMaterials.length) return toast('Materials not loaded','error');
+
+  document.getElementById('cp-edit-id').value = id;
+  document.getElementById('cp-modal-title').textContent = 'Edit Purchase Record';
+  document.getElementById('cp-save-btn').innerHTML = '<i class="ti ti-check"></i> Save';
+  document.getElementById('cp-supplier').value = r.supplier || '';
+  document.getElementById('cp-qty').value = Number(r.qty_purchased);
+  document.getElementById('cp-price').value = (Number(r.qty_purchased) * Number(r.unit_price)).toFixed(2);
+
+  const mat = costingAllMaterials.find(m => m.id === r.material_id);
+  const cat = mat?.category === 'packaging' ? 'packaging' : 'raw_material';
+  costingFilterMaterialsByCategory(cat);
+  document.getElementById('cp-material').value = r.material_id;
+  document.getElementById('cp-material-search').value = r.costing_materials?.name ?? mat?.name ?? '';
+  document.getElementById('cp-uom').value = r.costing_materials?.uom ?? mat?.uom ?? '';
+
+  openModal('modal-costing-price');
 }
 
 async function costingDeletePurchaseRecord(id) {
