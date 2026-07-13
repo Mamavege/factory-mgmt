@@ -661,18 +661,29 @@
               </tr></thead>
               <tbody id="ship-lines"></tbody>
             </table>
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 4px 4px;font-size:12px;color:var(--text-muted)">
-              <span style="font-weight:600">Pallet size (cm):</span>
-              L <input type="number" id="ship-plt-l" min="0" step="0.1" oninput="recalcShip()" style="width:64px;text-align:right">
-              W <input type="number" id="ship-plt-w" min="0" step="0.1" oninput="recalcShip()" style="width:64px;text-align:right">
-              H <input type="number" id="ship-plt-h" min="0" step="0.1" oninput="recalcShip()" style="width:64px;text-align:right">
-              <span>= <strong id="ship-plt-m3" style="color:var(--text)">0.000</strong> m³/pallet</span>
+            <div style="padding:12px 4px 4px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                <span style="font-size:12px;font-weight:600;color:var(--text-muted)">Pallets used in this shipment (enter each pallet size × qty)</span>
+                <button class="btn btn-secondary btn-sm" style="width:auto" onclick="addPalletRow()"><i class="ti ti-plus"></i> Add Pallet</button>
+              </div>
+              <table style="width:100%;min-width:420px">
+                <thead><tr style="background:var(--bg)">
+                  <th style="padding:6px 10px;font-size:11px;text-align:right">L (cm)</th>
+                  <th style="padding:6px 10px;font-size:11px;text-align:right">W (cm)</th>
+                  <th style="padding:6px 10px;font-size:11px;text-align:right">H (cm)</th>
+                  <th style="padding:6px 10px;font-size:11px;text-align:right">Qty</th>
+                  <th style="padding:6px 10px;font-size:11px;text-align:right">m³</th>
+                  <th></th>
+                </tr></thead>
+                <tbody id="ship-pallets"></tbody>
+              </table>
             </div>
             <div style="display:flex;justify-content:flex-end;gap:24px;padding:14px 12px 4px;border-top:2px solid var(--border);margin-top:8px">
               <div style="text-align:right"><div style="font-size:11px;color:var(--text-muted)">Total Cartons</div><div id="ship-total-ctn" style="font-size:20px;font-weight:800">0</div></div>
               <div style="text-align:right"><div style="font-size:11px;color:var(--text-muted)">Total Volume</div><div id="ship-total-m3" style="font-size:20px;font-weight:800;color:var(--accent)">0.000 m³</div></div>
               <div style="text-align:right"><div style="font-size:11px;color:var(--text-muted)">Total Gross Wt</div><div id="ship-total-wt" style="font-size:20px;font-weight:800;color:var(--warning)">0.0 kg</div></div>
-              <div style="text-align:right"><div style="font-size:11px;color:var(--text-muted)">Total Pallets</div><div id="ship-total-plt" style="font-size:20px;font-weight:800;color:var(--success)">0</div></div>
+              <div style="text-align:right"><div style="font-size:11px;color:var(--text-muted)">Est. Pallets (by ctn)</div><div id="ship-total-plt" style="font-size:20px;font-weight:800;color:var(--success)">0</div></div>
+              <div style="text-align:right"><div style="font-size:11px;color:var(--text-muted)">Pallets Used</div><div id="ship-pallets-used" style="font-size:20px;font-weight:800;color:var(--text)">0</div></div>
               <div style="text-align:right"><div style="font-size:11px;color:var(--text-muted)">Pallet Volume</div><div id="ship-total-pltm3" style="font-size:20px;font-weight:800;color:var(--info)">0.000 m³</div></div>
             </div>
           </div>
@@ -2617,12 +2628,11 @@ async function loadShipment() {
   renderShipSizes();
   document.getElementById('ship-lines').innerHTML = '';
   addShipLine();
-  // restore saved pallet size
-  try { const p = JSON.parse(localStorage.getItem('shipPallet')||'{}');
-    if (p.l!=null) document.getElementById('ship-plt-l').value = p.l;
-    if (p.w!=null) document.getElementById('ship-plt-w').value = p.w;
-    if (p.h!=null) document.getElementById('ship-plt-h').value = p.h;
-  } catch(e){}
+  // restore saved pallet rows
+  document.getElementById('ship-pallets').innerHTML = '';
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem('shipPallets')||'[]'); } catch(e){}
+  if (saved.length) saved.forEach(p=>addPalletRow(p.l,p.w,p.h,p.qty)); else addPalletRow();
   recalcShip();
 }
 function renderShipSizes() {
@@ -2663,6 +2673,17 @@ function addShipLine() {
     <td style="padding:6px 12px;text-align:right"><button class="btn btn-danger btn-sm" onclick="this.closest('tr').remove();recalcShip()"><i class="ti ti-trash"></i></button></td>`;
   document.getElementById('ship-lines').appendChild(tr);
 }
+function addPalletRow(l='', w='', h='', qty='') {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td style="padding:5px 10px;text-align:right"><input type="number" class="plt-l" min="0" step="0.1" value="${l}" oninput="recalcShip()" style="width:64px;text-align:right"></td>
+    <td style="padding:5px 10px;text-align:right"><input type="number" class="plt-w" min="0" step="0.1" value="${w}" oninput="recalcShip()" style="width:64px;text-align:right"></td>
+    <td style="padding:5px 10px;text-align:right"><input type="number" class="plt-h" min="0" step="0.1" value="${h}" oninput="recalcShip()" style="width:64px;text-align:right"></td>
+    <td style="padding:5px 10px;text-align:right"><input type="number" class="plt-qty" min="0" step="1" value="${qty}" oninput="recalcShip()" style="width:56px;text-align:right"></td>
+    <td style="padding:5px 10px;text-align:right;font-weight:600" class="plt-m3">0.000</td>
+    <td style="padding:5px 10px;text-align:right"><button class="btn btn-danger btn-sm" onclick="this.closest('tr').remove();recalcShip()"><i class="ti ti-trash"></i></button></td>`;
+  document.getElementById('ship-pallets').appendChild(tr);
+}
 function recalcShip() {
   let totC=0, totM3=0, totWt=0, totPlt=0;
   document.querySelectorAll('#ship-lines tr').forEach(tr=>{
@@ -2683,14 +2704,21 @@ function recalcShip() {
   document.getElementById('ship-total-m3').textContent = totM3.toFixed(3)+' m³';
   document.getElementById('ship-total-wt').textContent = totWt.toFixed(1)+' kg';
   document.getElementById('ship-total-plt').textContent = totPlt;
-  // pallet size → pallet volume
-  const pl=parseFloat(document.getElementById('ship-plt-l')?.value)||0;
-  const pw=parseFloat(document.getElementById('ship-plt-w')?.value)||0;
-  const ph=parseFloat(document.getElementById('ship-plt-h')?.value)||0;
-  const palletM3 = pl*pw*ph/1e6;
-  document.getElementById('ship-plt-m3').textContent = palletM3.toFixed(3);
-  document.getElementById('ship-total-pltm3').textContent = (palletM3*totPlt).toFixed(3)+' m³';
-  try { localStorage.setItem('shipPallet', JSON.stringify({l:pl||null,w:pw||null,h:ph||null})); } catch(e){}
+  // manual pallets used → pallet volume
+  let usedPlt=0, pltVol=0; const saved=[];
+  document.querySelectorAll('#ship-pallets tr').forEach(tr=>{
+    const l=parseFloat(tr.querySelector('.plt-l').value)||0;
+    const w=parseFloat(tr.querySelector('.plt-w').value)||0;
+    const h=parseFloat(tr.querySelector('.plt-h').value)||0;
+    const q=parseFloat(tr.querySelector('.plt-qty').value)||0;
+    const m3=l*w*h/1e6;
+    tr.querySelector('.plt-m3').textContent = (m3*q).toFixed(3);
+    usedPlt+=q; pltVol+=m3*q;
+    saved.push({l:l||'',w:w||'',h:h||'',qty:q||''});
+  });
+  document.getElementById('ship-pallets-used').textContent = usedPlt;
+  document.getElementById('ship-total-pltm3').textContent = pltVol.toFixed(3)+' m³';
+  try { localStorage.setItem('shipPallets', JSON.stringify(saved)); } catch(e){}
 }
 
 // ─── EQUIPMENT ──────────────────────────────────────
