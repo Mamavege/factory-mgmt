@@ -3076,8 +3076,10 @@ const COSTING_FG = [
   { code: 'SHCR', name: 'Self Heating Curry Rice',                         semiFG: [],                  outsourced: false },
   { code: 'TYSP', name: 'Tomyam Steamboat Paste',                          semiFG: [],                  outsourced: false },
   { code: 'TMSP', name: 'Tomato Steamboat Paste',                          semiFG: [],                  outsourced: false },
-  { code: 'MALA(PC)', name: 'Mala Soy Protein Meat (PC)',                   semiFG: [],                  outsourced: false },
-  { code: 'BBQ(PC)',  name: 'BBQ Soy Protein Meat (PC)',                    semiFG: [],                  outsourced: false },
+  { code: 'MALA(PC)',  name: 'Mala Soy Protein Meat (PC)',  semiFG: [], outsourced: false, noSharedCosts: true },
+  { code: 'BBQ(PC)',   name: 'BBQ Soy Protein Meat (PC)',   semiFG: [], outsourced: false, noSharedCosts: true },
+  { code: 'MALA(BOX)', name: 'Mala Soy Protein Meat (BOX)', semiFG: [], outsourced: false, noSharedCosts: true },
+  { code: 'BBQ(BOX)',  name: 'BBQ Soy Protein Meat (BOX)',  semiFG: [], outsourced: false, noSharedCosts: true },
 ];
 
 const MONTH_NAMES = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -3844,7 +3846,10 @@ function costingCalcResults() {
     const rmCPU    = out>0 ? rm/out : 0;
     const pkCPU    = out>0 ? pk/out : 0;
     const trCPU    = out>0 ? tr/out : 0;
-    const totalCPU = sfCost+rmCPU+pkCPU+trCPU+labourRate+utilRate+rentRate;
+    const fgLabour = fg.noSharedCosts ? 0 : labourRate;
+    const fgUtil   = fg.noSharedCosts ? 0 : utilRate;
+    const fgRent   = fg.noSharedCosts ? 0 : rentRate;
+    const totalCPU = sfCost+rmCPU+pkCPU+trCPU+fgLabour+fgUtil+fgRent;
     costingFGCostPerUnit[fg.code] = out > 0 ? totalCPU : 0;
     return `<tr>
       <td><span class="badge badge-info">${fg.code}</span></td>
@@ -3854,9 +3859,9 @@ function costingCalcResults() {
       <td>${fmt4(rmCPU)}</td>
       <td>${fmt4(pkCPU)}</td>
       <td>${fmt4(trCPU)}</td>
-      <td>${fmt4(labourRate)}</td>
-      <td>${fmt4(utilRate)}</td>
-      <td>${fmt4(rentRate)}</td>
+      <td>${fg.noSharedCosts ? '<span style="color:var(--text-muted);font-size:11px">N/A</span>' : fmt4(fgLabour)}</td>
+      <td>${fg.noSharedCosts ? '<span style="color:var(--text-muted);font-size:11px">N/A</span>' : fmt4(fgUtil)}</td>
+      <td>${fg.noSharedCosts ? '<span style="color:var(--text-muted);font-size:11px">N/A</span>' : fmt4(fgRent)}</td>
       <td style="background:#f0fdf4;font-weight:800;color:var(--success);white-space:nowrap">${out>0?'RM '+totalCPU.toFixed(4):'—'}</td>
     </tr>`;
   }).join('');
@@ -4027,7 +4032,10 @@ function costingOpenProduct(type, code) {
       sfCPU[sf.code] = sfOut > 0 ? (sfRM + sfPk + sfTr + sfGs) / sfOut : 0;
     });
     const sfTotalCPU = fg.semiFG.reduce((s, c) => s + (sfCPU[c] || 0), 0);
-    totalCPU = sfTotalCPU + rmCPU + pkCPU + trCPU + labourRate + utilRate + rentRate;
+    const fgLabour = fg.noSharedCosts ? 0 : labourRate;
+    const fgUtil   = fg.noSharedCosts ? 0 : utilRate;
+    const fgRent   = fg.noSharedCosts ? 0 : rentRate;
+    totalCPU = sfTotalCPU + rmCPU + pkCPU + trCPU + fgLabour + fgUtil + fgRent;
 
     // Raw Materials card
     topCards += miniCard('<i class="ti ti-plant-2" style="margin-right:4px"></i>Raw Materials', tRow('Raw material cost', rmCPU, out > 0 ? `RM ${rm.toFixed(2)} ÷ ${out.toLocaleString()} units` : 'No output entered'), rmCPU);
@@ -4056,9 +4064,11 @@ function costingOpenProduct(type, code) {
       });
       bottomCards += miniCard('<i class="ti ti-stack-2" style="margin-right:4px"></i>Semi FG Components', sfRows, sfTotalCPU);
     }
-    bottomCards += miniCard('<i class="ti ti-users" style="margin-right:4px"></i>Labour', tRow('Shared labour', labourRate, `RM ${labour.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} total units`), labourRate);
-    bottomCards += miniCard('<i class="ti ti-bolt" style="margin-right:4px"></i>Utilities', tRow('Electric + Water (80%)', utilRate, `RM ${utilAlloc.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} units`), utilRate);
-    bottomCards += miniCard('<i class="ti ti-building" style="margin-right:4px"></i>Rental', tRow('Rental (75%)', rentRate, `RM ${rentAlloc.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} units`), rentRate);
+    if (!fg.noSharedCosts) {
+      bottomCards += miniCard('<i class="ti ti-users" style="margin-right:4px"></i>Labour', tRow('Shared labour', labourRate, `RM ${labour.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} total units`), labourRate);
+      bottomCards += miniCard('<i class="ti ti-bolt" style="margin-right:4px"></i>Utilities', tRow('Electric + Water (80%)', utilRate, `RM ${utilAlloc.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} units`), utilRate);
+      bottomCards += miniCard('<i class="ti ti-building" style="margin-right:4px"></i>Rental', tRow('Rental (75%)', rentRate, `RM ${rentAlloc.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} units`), rentRate);
+    }
     if (tr > 0) bottomCards += miniCard('<i class="ti ti-truck" style="margin-right:4px"></i>Transportation', tRow('Transport expenses', trCPU, `RM ${tr.toFixed(2)} ÷ ${out.toLocaleString()} units`), trCPU);
   }
 
