@@ -655,6 +655,7 @@
                 <th style="padding:8px 12px;font-size:11px;text-align:right">Carton m³</th>
                 <th style="padding:8px 12px;font-size:11px;text-align:right">Cartons</th>
                 <th style="padding:8px 12px;font-size:11px;text-align:right">Total m³</th>
+                <th style="padding:8px 12px;font-size:11px;text-align:right">Gross Wt (kg)</th>
                 <th></th>
               </tr></thead>
               <tbody id="ship-lines"></tbody>
@@ -662,12 +663,13 @@
             <div style="display:flex;justify-content:flex-end;gap:24px;padding:14px 12px 4px;border-top:2px solid var(--border);margin-top:8px">
               <div style="text-align:right"><div style="font-size:11px;color:var(--text-muted)">Total Cartons</div><div id="ship-total-ctn" style="font-size:20px;font-weight:800">0</div></div>
               <div style="text-align:right"><div style="font-size:11px;color:var(--text-muted)">Total Volume</div><div id="ship-total-m3" style="font-size:20px;font-weight:800;color:var(--accent)">0.000 m³</div></div>
+              <div style="text-align:right"><div style="font-size:11px;color:var(--text-muted)">Total Gross Wt</div><div id="ship-total-wt" style="font-size:20px;font-weight:800;color:var(--warning)">0.0 kg</div></div>
             </div>
           </div>
         </div>
         <div class="card">
           <div class="card-header">
-            <div class="card-title" style="margin:0">Carton Sizes <span style="font-size:11px;color:var(--text-muted)">(set L×W×H in cm once per FG)</span></div>
+            <div class="card-title" style="margin:0">Carton Sizes <span style="font-size:11px;color:var(--text-muted)">(set L×W×H in cm + gross kg once per FG)</span></div>
           </div>
           <div style="max-height:420px;overflow:auto">
             <table style="width:100%;min-width:600px">
@@ -678,6 +680,7 @@
                 <th style="padding:8px 12px;font-size:11px;text-align:right">W (cm)</th>
                 <th style="padding:8px 12px;font-size:11px;text-align:right">H (cm)</th>
                 <th style="padding:8px 12px;font-size:11px;text-align:right">m³/ctn</th>
+                <th style="padding:8px 12px;font-size:11px;text-align:right">Gross (kg)</th>
                 <th></th>
               </tr></thead>
               <tbody id="ship-sizes"></tbody>
@@ -2598,7 +2601,7 @@ async function saveWip() {
 let shipInv = [], shipLineSeq = 0;
 function ctnM3(it){ const l=parseFloat(it?.ctn_l)||0, w=parseFloat(it?.ctn_w)||0, h=parseFloat(it?.ctn_h)||0; return l*w*h/1e6; }
 async function loadShipment() {
-  const { data } = await sb.from('inventory').select('id,item_code,item_name,ctn_l,ctn_w,ctn_h').order('item_code');
+  const { data } = await sb.from('inventory').select('id,item_code,item_name,ctn_l,ctn_w,ctn_h,ctn_gross_kg').order('item_code');
   shipInv = data || [];
   renderShipSizes();
   document.getElementById('ship-lines').innerHTML = '';
@@ -2613,6 +2616,7 @@ function renderShipSizes() {
     <td style="padding:6px 12px;text-align:right"><input type="number" id="cw-${it.id}" value="${it.ctn_w??''}" min="0" step="0.1" style="width:62px;text-align:right"></td>
     <td style="padding:6px 12px;text-align:right"><input type="number" id="ch-${it.id}" value="${it.ctn_h??''}" min="0" step="0.1" style="width:62px;text-align:right"></td>
     <td style="padding:6px 12px;text-align:right;font-weight:600" id="m3-${it.id}">${ctnM3(it).toFixed(4)}</td>
+    <td style="padding:6px 12px;text-align:right"><input type="number" id="cg-${it.id}" value="${it.ctn_gross_kg??''}" min="0" step="0.01" style="width:70px;text-align:right"></td>
     <td style="padding:6px 12px;text-align:right"><button class="btn btn-secondary btn-sm" onclick="saveShipSize('${it.id}')"><i class="ti ti-check"></i></button></td>
   </tr>`).join('');
 }
@@ -2620,9 +2624,10 @@ async function saveShipSize(id) {
   const l=parseFloat(document.getElementById('cl-'+id).value)||null;
   const w=parseFloat(document.getElementById('cw-'+id).value)||null;
   const h=parseFloat(document.getElementById('ch-'+id).value)||null;
-  const { error } = await sb.from('inventory').update({ctn_l:l,ctn_w:w,ctn_h:h}).eq('id',id);
+  const g=parseFloat(document.getElementById('cg-'+id).value)||null;
+  const { error } = await sb.from('inventory').update({ctn_l:l,ctn_w:w,ctn_h:h,ctn_gross_kg:g}).eq('id',id);
   if (error) return toast('Save failed: '+error.message,'error');
-  const it = shipInv.find(x=>x.id===id); if (it){ it.ctn_l=l; it.ctn_w=w; it.ctn_h=h; }
+  const it = shipInv.find(x=>x.id===id); if (it){ it.ctn_l=l; it.ctn_w=w; it.ctn_h=h; it.ctn_gross_kg=g; }
   document.getElementById('m3-'+id).textContent = ctnM3({ctn_l:l,ctn_w:w,ctn_h:h}).toFixed(4);
   toast('Saved'); recalcShip();
 }
@@ -2634,22 +2639,26 @@ function addShipLine() {
     <td style="padding:6px 12px;text-align:right;font-size:12px" class="ship-m3ctn">—</td>
     <td style="padding:6px 12px;text-align:right"><input type="number" class="ship-qty" min="0" step="1" oninput="recalcShip()" style="width:80px;text-align:right"></td>
     <td style="padding:6px 12px;text-align:right;font-weight:700" class="ship-rowm3">0.000</td>
+    <td style="padding:6px 12px;text-align:right;font-weight:700" class="ship-rowwt">0.0</td>
     <td style="padding:6px 12px;text-align:right"><button class="btn btn-danger btn-sm" onclick="this.closest('tr').remove();recalcShip()"><i class="ti ti-trash"></i></button></td>`;
   document.getElementById('ship-lines').appendChild(tr);
 }
 function recalcShip() {
-  let totC=0, totM3=0;
+  let totC=0, totM3=0, totWt=0;
   document.querySelectorAll('#ship-lines tr').forEach(tr=>{
     const it = shipInv.find(x=>x.id===tr.querySelector('.ship-item').value);
     const m3c = ctnM3(it);
+    const gwc = parseFloat(it?.ctn_gross_kg)||0;
     const qty = parseFloat(tr.querySelector('.ship-qty').value)||0;
     tr.querySelector('.ship-m3ctn').textContent = it ? m3c.toFixed(4) : '—';
-    const rm = m3c*qty;
+    const rm = m3c*qty, rw = gwc*qty;
     tr.querySelector('.ship-rowm3').textContent = rm.toFixed(3);
-    totC += qty; totM3 += rm;
+    tr.querySelector('.ship-rowwt').textContent = rw.toFixed(1);
+    totC += qty; totM3 += rm; totWt += rw;
   });
   document.getElementById('ship-total-ctn').textContent = totC;
   document.getElementById('ship-total-m3').textContent = totM3.toFixed(3)+' m³';
+  document.getElementById('ship-total-wt').textContent = totWt.toFixed(1)+' kg';
 }
 
 // ─── EQUIPMENT ──────────────────────────────────────
