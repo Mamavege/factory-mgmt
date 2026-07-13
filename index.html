@@ -3261,12 +3261,15 @@ async function costingLoadPrices(monthId) {
   });
 }
 
-function costingGetSFBOMCost(code, pots, category) {
+// Packaging BOM qty is per unit; raw material / cooking_gas BOM qty is per pot
+function costingGetSFBOMCost(code, pots, category, outputUnits) {
   const bom = costingBOM[code];
   if (!bom || !bom.length) return null;
   const sfDef = COSTING_SEMI_FG.find(s => s.code === code);
   const isManualQty = sfDef?.manualBomQty;
-  if (!isManualQty && !pots) return null;
+  const isPerUnit = category === 'packaging';
+  if (!isManualQty && !isPerUnit && !pots) return null;
+  if (isPerUnit && !outputUnits) return null;
   const items = bom.filter(b => b.category === category);
   if (!items.length) return null;
   const manualQtys = costingManualBomQty[code] || {};
@@ -3274,6 +3277,9 @@ function costingGetSFBOMCost(code, pots, category) {
     if (isManualQty) {
       const qty = Number(manualQtys[b.id]) || 0;
       return total + qty * (costingEffectivePrices[b.material_name]?.price||0);
+    }
+    if (isPerUnit) {
+      return total + (Number(b.qty_per_pot)||0) * (costingEffectivePrices[b.material_name]?.price||0) * outputUnits;
     }
     const yld = costingGetEffectiveYield(b.material_name, Number(b.yield_pct)||100);
     const purchaseQty = (Number(b.qty_per_pot)||0) / (yld / 100);
@@ -3643,12 +3649,22 @@ function costingRenderSFBOMDetail(code) {
     return;
   }
 
+  const out = Number(document.getElementById(`sf-out-${code}`)?.value)||0;
   const rows = bom.map(b => {
+    const ep = costingEffectivePrices[b.material_name] || {price:0, source:'missing', sourceLabel:'No price'};
+    const srcColor = ep.source==='this_month'?'var(--success)':ep.source==='fallback'?'#f59e0b':'var(--danger)';
+    if (b.category === 'packaging') {
+      const lineCost = (Number(b.qty_per_pot)||0) * ep.price * out;
+      return `<tr style="border-top:1px solid var(--border)">
+        <td style="padding:4px 8px">${b.material_name}</td>
+        <td style="padding:4px 8px;text-align:right">${b.qty_per_pot} ${b.uom}/unit × ${out} units = ${((Number(b.qty_per_pot)||0)*out).toFixed(4)} ${b.uom}</td>
+        <td style="padding:4px 8px;text-align:right"><span style="font-size:10px;color:${srcColor}">${ep.sourceLabel}</span><br>RM ${ep.price.toFixed(4)}/${b.uom}</td>
+        <td style="padding:4px 8px;text-align:right;font-weight:700">RM ${lineCost.toFixed(4)}</td>
+      </tr>`;
+    }
     const yld = costingGetEffectiveYield(b.material_name, Number(b.yield_pct)||100);
     const purchaseQty = (Number(b.qty_per_pot)||0) / (yld/100);
-    const ep = costingEffectivePrices[b.material_name] || {price:0, source:'missing', sourceLabel:'No price'};
     const lineCost = purchaseQty * ep.price * pots;
-    const srcColor = ep.source==='this_month'?'var(--success)':ep.source==='fallback'?'#f59e0b':'var(--danger)';
     const yieldNote = yld < 100 ? ` <span style="color:var(--text-muted)">(usable ${b.qty_per_pot} ${b.uom}, yield ${yld.toFixed(1)}%)</span>` : '';
     return `<tr style="border-top:1px solid var(--border)">
       <td style="padding:4px 8px">${b.material_name}${yieldNote}</td>
@@ -3658,19 +3674,21 @@ function costingRenderSFBOMDetail(code) {
     </tr>`;
   }).join('');
   const total = bom.reduce((s,b) => {
+    const ep = costingEffectivePrices[b.material_name] || {price:0};
+    if (b.category === 'packaging') return s + (Number(b.qty_per_pot)||0) * ep.price * out;
     const yld = costingGetEffectiveYield(b.material_name, Number(b.yield_pct)||100);
     const pq = (Number(b.qty_per_pot)||0)/(yld/100);
-    return s + pq * (costingEffectivePrices[b.material_name]?.price||0) * pots;
+    return s + pq * ep.price * pots;
   }, 0);
   el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:11px">
     <thead><tr style="background:var(--border-light,#e5e7eb)">
       <th style="padding:4px 8px;text-align:left">Material</th>
-      <th style="padding:4px 8px;text-align:right">Qty (with yield)</th>
+      <th style="padding:4px 8px;text-align:right">Qty</th>
       <th style="padding:4px 8px;text-align:right">Unit Price</th>
       <th style="padding:4px 8px;text-align:right">Cost</th>
     </tr></thead><tbody>${rows}</tbody>
     <tfoot><tr style="border-top:2px solid var(--border)">
-      <td colspan="3" style="padding:5px 8px;font-weight:700">Total Raw Material Cost (${pots} pot${pots!==1?'s':''})</td>
+      <td colspan="3" style="padding:5px 8px;font-weight:700">Total Cost</td>
       <td style="padding:5px 8px;text-align:right;font-weight:800;color:var(--accent)">RM ${total.toFixed(4)}</td>
     </tr></tfoot></table>`;
 }
@@ -3695,11 +3713,12 @@ function costingManualBomQtyChanged(code, bomId, qty) {
   costingScheduleAutoSave();
 }
 
-function costingGetAutoOrManual(code, category, autoIdPrefix, manualIdPrefix, pots) {
+function costingGetAutoOrManual(code, category, autoIdPrefix, manualIdPrefix, pots, outputUnits) {
   const autoEl = document.getElementById(`${autoIdPrefix}-${code}`);
   if (autoEl) {
-    const calc = costingGetSFBOMCost(code, pots, category) ?? 0;
-    autoEl.textContent = pots > 0 ? `RM ${calc.toFixed(4)}` : '—';
+    const calc = costingGetSFBOMCost(code, pots, category, outputUnits) ?? 0;
+    const hasQty = category === 'packaging' ? (outputUnits > 0) : (pots > 0);
+    autoEl.textContent = hasQty ? `RM ${calc.toFixed(4)}` : '—';
     return calc;
   }
   return Number(document.getElementById(`${manualIdPrefix}-${code}`)?.value)||0;
@@ -3709,9 +3728,9 @@ function costingCalcSemiFGRow(code) {
   const pots = Number(document.getElementById(`sf-pots-${code}`)?.value)||0;
   const out  = Number(document.getElementById(`sf-out-${code}`)?.value)||0;
 
-  const rm = costingGetAutoOrManual(code, 'raw_material', 'sf-rm-auto', 'sf-rm', pots);
-  const pk = costingGetAutoOrManual(code, 'packaging',    'sf-pk-auto', 'sf-pk', pots);
-  const gs = costingGetAutoOrManual(code, 'cooking_gas',  'sf-gs-auto', 'sf-gs', pots);
+  const rm = costingGetAutoOrManual(code, 'raw_material', 'sf-rm-auto', 'sf-rm', pots, out);
+  const pk = costingGetAutoOrManual(code, 'packaging',    'sf-pk-auto', 'sf-pk', pots, out);
+  const gs = costingGetAutoOrManual(code, 'cooking_gas',  'sf-gs-auto', 'sf-gs', pots, out);
   const tr = Number(document.getElementById(`sf-tr-${code}`)?.value)||0;
 
   if (document.getElementById(`sf-rm-auto-${code}`) &&
@@ -3729,9 +3748,9 @@ function costingCalcResults() {
   COSTING_SEMI_FG.forEach(sf => {
     const out  = Number(document.getElementById(`sf-out-${sf.code}`)?.value)||0;
     const pots = Number(document.getElementById(`sf-pots-${sf.code}`)?.value)||0;
-    const rm = costingGetAutoOrManual(sf.code, 'raw_material', 'sf-rm-auto', 'sf-rm', pots);
-    const pk = costingGetAutoOrManual(sf.code, 'packaging',    'sf-pk-auto', 'sf-pk', pots);
-    const gs = costingGetAutoOrManual(sf.code, 'cooking_gas',  'sf-gs-auto', 'sf-gs', pots);
+    const rm = costingGetAutoOrManual(sf.code, 'raw_material', 'sf-rm-auto', 'sf-rm', pots, out);
+    const pk = costingGetAutoOrManual(sf.code, 'packaging',    'sf-pk-auto', 'sf-pk', pots, out);
+    const gs = costingGetAutoOrManual(sf.code, 'cooking_gas',  'sf-gs-auto', 'sf-gs', pots, out);
     const tr = Number(document.getElementById(`sf-tr-${sf.code}`)?.value)||0;
     sfCPU[sf.code] = out > 0 ? (rm+pk+tr+gs)/out : 0;
   });
@@ -3906,6 +3925,9 @@ function costingOpenProduct(type, code) {
           const qty = Number(manualQtys[b.id]) || 0;
           matCPU = out > 0 ? qty * ep.price / out : 0;
           rmRows += tRow(b.material_name, matCPU, `${qty} ${b.uom} used, RM ${ep.price.toFixed(4)}/${b.uom}`);
+        } else if (b.category === 'packaging') {
+          matCPU = (Number(b.qty_per_pot)||0) * ep.price;
+          // packaging rows shown separately below
         } else {
           const yld = costingGetEffectiveYield(b.material_name, b.yield_pct || 100);
           const matCost = pots > 0 ? (b.qty_per_pot / (yld/100)) * pots * ep.price : 0;
@@ -3919,7 +3941,18 @@ function costingOpenProduct(type, code) {
     topCards += miniCard('<i class="ti ti-plant-2" style="margin-right:4px"></i>Raw Materials', rmRows, rmCPU);
 
     // Packaging card
-    topCards += miniCard('<i class="ti ti-package" style="margin-right:4px"></i>Packaging', tRow('Packaging materials', pkCPU, out > 0 ? `RM ${pk.toFixed(2)} ÷ ${out.toLocaleString()} units` : ''), pkCPU);
+    const sfPkBom = (costingBOM[code] || []).filter(b => b.category === 'packaging');
+    let pkRows = '';
+    if (sfPkBom.length) {
+      sfPkBom.forEach(b => {
+        const ep = costingEffectivePrices[b.material_name] || { price: 0 };
+        const cpu = (Number(b.qty_per_pot)||0) * ep.price;
+        pkRows += tRow(b.material_name, cpu, `${b.qty_per_pot} ${b.uom}/unit, RM ${ep.price.toFixed(4)}/${b.uom}`);
+      });
+    } else {
+      pkRows = tRow('Packaging materials', pkCPU, out > 0 ? `RM ${pk.toFixed(2)} ÷ ${out.toLocaleString()} units` : '');
+    }
+    topCards += miniCard('<i class="ti ti-package" style="margin-right:4px"></i>Packaging', pkRows, pkCPU);
 
     // Other cost cards (no labour/utilities — those are allocated at FG level)
     if (gs > 0) bottomCards += miniCard('<i class="ti ti-flame" style="margin-right:4px"></i>Cooking Gas', tRow('Cooking gas', gsCPU, `RM ${gs.toFixed(2)} ÷ ${out.toLocaleString()} units`), gsCPU);
