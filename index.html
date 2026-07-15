@@ -3274,7 +3274,7 @@ async function costingLoadPrices(monthId) {
   const thisMonthAvgTr = {};    // transport records only
   costingPurchaseRecords.forEach(r => {
     const mat = r.costing_materials?.name;
-    const cat = r.costing_materials?.category;
+    const cat = r.category ?? r.costing_materials?.category;  // use stored tab category
     if (!mat) return;
     const map = cat === 'transport' ? thisMonthAvgTr : thisMonthAvg;
     if (!map[mat]) map[mat] = {qty:0, cost:0};
@@ -3287,7 +3287,7 @@ async function costingLoadPrices(monthId) {
   const monthlyGroupsTr = {};
   (historical||[]).forEach(r => {
     const mat = r.costing_materials?.name;
-    const cat = r.costing_materials?.category;
+    const cat = r.category ?? r.costing_materials?.category;  // use stored tab category
     if (!mat) return;
     const groups = cat === 'transport' ? monthlyGroupsTr : monthlyGroups;
     const key = `${r.month_id}__${mat}`;
@@ -3386,7 +3386,7 @@ function costingRenderPurchaseRecords() {
     const unitPrice = Number(r.unit_price);
     const total = qty * unitPrice;
     const uom = r.costing_materials?.uom ?? r.uom ?? '';
-    const cat = r.costing_materials?.category ?? '';
+    const cat = r.category ?? r.costing_materials?.category ?? '';
     const catColor = cat==='packaging'?'#2563eb':cat==='transport'?'#dc2626':cat==='cooking_gas'?'#16a34a':'var(--text)';
     return `<tr style="border-top:1px solid var(--border)">
     <td style="padding:6px 10px;font-weight:600;color:${catColor}">${r.costing_materials?.name ?? r.material_name ?? '—'}</td>
@@ -3515,15 +3515,16 @@ async function costingSavePurchaseRecord() {
 
   if (editId) {
     const { data, error } = await sb.from('costing_purchase_records').update({
-      material_id, supplier, qty_purchased: qty, unit_price
-    }).eq('id', editId).select('*, costing_materials(name, uom)').single();
+      material_id, supplier, qty_purchased: qty, unit_price, category: _cpCurrentCategory
+    }).eq('id', editId).select('*, costing_materials(name, uom, category)').single();
     if (error) return toast('Error: '+error.message,'error');
     costingPurchaseRecords = costingPurchaseRecords.map(r => r.id === editId ? data : r);
     toast('Purchase record updated');
   } else {
     const { data, error } = await sb.from('costing_purchase_records').insert({
-      month_id: costingCurrentMonthId, material_id, supplier, qty_purchased: qty, unit_price
-    }).select('*, costing_materials(name, uom)').single();
+      month_id: costingCurrentMonthId, material_id, supplier, qty_purchased: qty, unit_price,
+      category: _cpCurrentCategory
+    }).select('*, costing_materials(name, uom, category)').single();
     if (error) return toast('Error: '+error.message,'error');
     costingPurchaseRecords.push(data);
     toast('Purchase record added');
