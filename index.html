@@ -3269,50 +3269,67 @@ async function costingLoadPrices(monthId) {
 
   costingPurchaseRecords = thisMonthData || [];
 
-  // Weighted avg for this month per material name (all categories unified)
-  const thisMonthAvg = {};
+  // Build separate weighted-avg maps: one for non-transport, one for transport only
+  const thisMonthAvg = {};      // raw_material, packaging, cooking_gas records
+  const thisMonthAvgTr = {};    // transport records only
   costingPurchaseRecords.forEach(r => {
     const mat = r.costing_materials?.name;
+    const cat = r.costing_materials?.category;
     if (!mat) return;
-    if (!thisMonthAvg[mat]) thisMonthAvg[mat] = {qty:0, cost:0};
-    thisMonthAvg[mat].qty  += Number(r.qty_purchased)||0;
-    thisMonthAvg[mat].cost += (Number(r.qty_purchased)||0) * (Number(r.unit_price)||0);
+    const map = cat === 'transport' ? thisMonthAvgTr : thisMonthAvg;
+    if (!map[mat]) map[mat] = {qty:0, cost:0};
+    map[mat].qty  += Number(r.qty_purchased)||0;
+    map[mat].cost += (Number(r.qty_purchased)||0) * (Number(r.unit_price)||0);
   });
 
-  // Last known price per material from historical months
+  // Last known price per material from historical months — split by category
   const monthlyGroups = {};
+  const monthlyGroupsTr = {};
   (historical||[]).forEach(r => {
     const mat = r.costing_materials?.name;
+    const cat = r.costing_materials?.category;
     if (!mat) return;
+    const groups = cat === 'transport' ? monthlyGroupsTr : monthlyGroups;
     const key = `${r.month_id}__${mat}`;
-    if (!monthlyGroups[key]) monthlyGroups[key] = {
+    if (!groups[key]) groups[key] = {
       mat, qty:0, cost:0,
       year: r.costing_months?.year||0, month: r.costing_months?.month||0
     };
-    monthlyGroups[key].qty  += Number(r.qty_purchased)||0;
-    monthlyGroups[key].cost += (Number(r.qty_purchased)||0) * (Number(r.unit_price)||0);
+    groups[key].qty  += Number(r.qty_purchased)||0;
+    groups[key].cost += (Number(r.qty_purchased)||0) * (Number(r.unit_price)||0);
   });
-  const lastKnown = {};
-  Object.values(monthlyGroups)
-    .filter(g => g.qty > 0)
-    .sort((a,b) => b.year - a.year || b.month - a.month)
-    .forEach(g => { if (!lastKnown[g.mat]) lastKnown[g.mat] = {price: g.cost/g.qty, year: g.year, month: g.month}; });
+  const buildLastKnown = (groups) => {
+    const lk = {};
+    Object.values(groups).filter(g => g.qty > 0)
+      .sort((a,b) => b.year - a.year || b.month - a.month)
+      .forEach(g => { if (!lk[g.mat]) lk[g.mat] = {price: g.cost/g.qty, year: g.year, month: g.month}; });
+    return lk;
+  };
+  const lastKnown   = buildLastKnown(monthlyGroups);
+  const lastKnownTr = buildLastKnown(monthlyGroupsTr);
 
-  // Single unified price map for all BOM materials
-  const allBOMMats = new Set(Object.values(costingBOM).flat().map(b => b.material_name));
-  costingEffectivePrices = {};
-  costingTransportPrices = costingEffectivePrices; // same pool — transport and packaging share prices
-  allBOMMats.forEach(mat => {
-    const tm = thisMonthAvg[mat];
-    if (tm && tm.qty > 0) {
-      costingEffectivePrices[mat] = {price: tm.cost/tm.qty, source:'this_month', sourceLabel:'This month (weighted avg)'};
-    } else if (lastKnown[mat]) {
-      const lk = lastKnown[mat];
-      costingEffectivePrices[mat] = {price: lk.price, source:'fallback', sourceLabel:`Fallback: ${MONTH_NAMES[lk.month]} ${lk.year}`};
-    } else {
-      costingEffectivePrices[mat] = {price: 0, source:'missing', sourceLabel:'No price data — enter purchase record'};
-    }
-  });
+  // Build two separate price maps — packaging/raw/gas vs transport
+  const buildPriceMap = (avgMap, lkMap, mats) => {
+    const out = {};
+    mats.forEach(mat => {
+      const tm = avgMap[mat];
+      if (tm && tm.qty > 0) {
+        out[mat] = {price: tm.cost/tm.qty, source:'this_month', sourceLabel:'This month (weighted avg)'};
+      } else if (lkMap[mat]) {
+        const lk = lkMap[mat];
+        out[mat] = {price: lk.price, source:'fallback', sourceLabel:`Fallback: ${MONTH_NAMES[lk.month]} ${lk.year}`};
+      } else {
+        out[mat] = {price: 0, source:'missing', sourceLabel:'No price data — enter purchase record'};
+      }
+    });
+    return out;
+  };
+
+  const nonTrMats = new Set(Object.values(costingBOM).flat().filter(b => b.category !== 'transport').map(b => b.material_name));
+  const trMats    = new Set(Object.values(costingBOM).flat().filter(b => b.category === 'transport').map(b => b.material_name));
+
+  costingEffectivePrices = buildPriceMap(thisMonthAvg,   lastKnown,   nonTrMats);
+  costingTransportPrices = buildPriceMap(thisMonthAvgTr, lastKnownTr, trMats);
 }
 
 // Packaging BOM qty is per unit; raw material / cooking_gas BOM qty is per pot
@@ -3328,7 +3345,7 @@ function costingGetSFBOMCost(code, pots, category, outputUnits) {
   if (!items.length) return null;
   const manualQtys = costingManualBomQty[code] || {};
   return items.reduce((total, b) => {
-    const priceMap = costingEffectivePrices;
+    const priceMap = b.category === 'transport' ? costingTransportPrices : costingEffectivePrices;
     if (isManualQty) {
       const qty = Number(manualQtys[b.id]) || 0;
       return total + qty * (priceMap[b.material_name]?.price||0);
@@ -3352,7 +3369,7 @@ function costingGetFGBOMCost(code, outputUnits, category) {
   const items = bom.filter(b => b.category === category);
   if (!items.length) return null;
   return items.reduce((total, b) => {
-    const priceMap = costingEffectivePrices;
+    const priceMap = b.category === 'transport' ? costingTransportPrices : costingEffectivePrices;
     return total + (Number(b.qty_per_pot)||0) * (priceMap[b.material_name]?.price||0) * outputUnits;
   }, 0);
 }
@@ -3720,7 +3737,7 @@ function costingRenderSFBOMDetail(code) {
   const out = Number(document.getElementById(`sf-out-${code}`)?.value)||0;
 
   const makeRow = (b, isTransport) => {
-    const priceMap = costingEffectivePrices;
+    const priceMap = isTransport ? costingTransportPrices : costingEffectivePrices;
     const ep = priceMap[b.material_name] || {price:0, source:'missing', sourceLabel:'No price data — enter purchase record'};
     const srcColor = ep.source==='this_month'?'var(--success)':ep.source==='fallback'?'#f59e0b':'var(--danger)';
     const rowStyle = isTransport ? 'border-top:1px solid var(--border);color:#b91c1c' : 'border-top:1px solid var(--border)';
@@ -3764,7 +3781,8 @@ function costingRenderSFBOMDetail(code) {
   if (trBom.length)   tableRows += sectionHeader('TRANSPORT', '#b91c1c') + trRows;
 
   const total = bom.reduce((s,b) => {
-    const ep = costingEffectivePrices[b.material_name] || {price:0};
+    const priceMap = b.category === 'transport' ? costingTransportPrices : costingEffectivePrices;
+    const ep = priceMap[b.material_name] || {price:0};
     if (b.category === 'packaging' || b.category === 'transport') return s + (Number(b.qty_per_pot)||0) * ep.price * out;
     const yld = costingGetEffectiveYield(b.material_name, Number(b.yield_pct)||100);
     const pq = (Number(b.qty_per_pot)||0)/(yld/100);
