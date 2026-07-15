@@ -3635,18 +3635,20 @@ async function costingOpenMonth(id) {
     const pkCell = hasFgPkBOM
       ? `<td style="min-width:110px"><div style="font-weight:700;color:var(--accent)" id="fg-pk-auto-${fg.code}">—</div><div style="font-size:10px;color:var(--text-muted)">auto from BOM</div></td>`
       : `<td><input type="number" class="costing-input" id="fg-pk-${fg.code}" value="${d.packaging_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcResults()"></td>`;
+    const trExpandBtn = hasFgTrBOM ? `<button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-left:4px;color:#b91c1c;border-color:#b91c1c" onclick="costingToggleFGTransport('${fg.code}');event.stopPropagation()" title="View transport BOM"><i class="ti ti-truck"></i></button>` : '';
     const fgTrCell = hasFgTrBOM
-      ? `<td style="min-width:110px"><div style="font-weight:700;color:var(--accent)" id="fg-tr-auto-${fg.code}">—</div><div style="font-size:10px;color:var(--text-muted)">auto from BOM</div></td>`
+      ? `<td style="min-width:110px"><div style="font-weight:700;color:#b91c1c" id="fg-tr-auto-${fg.code}">—</div><div style="font-size:10px;color:var(--text-muted)">auto from BOM</div></td>`
       : `<td><input type="number" class="costing-input" id="fg-tr-${fg.code}" value="${d.transport_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcResults()"></td>`;
     return `<tr>
-      <td style="white-space:nowrap"><span class="badge badge-info">${fg.code}</span>${fg.outsourced?` <span class="badge badge-warning" style="font-size:10px">Outsourced</span>`:''}</td>
+      <td style="white-space:nowrap"><span class="badge badge-info">${fg.code}</span>${fg.outsourced?` <span class="badge badge-warning" style="font-size:10px">Outsourced</span>`:''}${trExpandBtn}</td>
       <td style="font-size:12px;min-width:180px"><a href="#" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:3px" onclick="costingOpenProduct('fg','${fg.code}');event.preventDefault()">${fg.name}</a></td>
       <td style="max-width:160px">${sfBadges||'<span style="color:var(--text-muted);font-size:11px">—</span>'}</td>
       <td><input type="number" class="costing-input" id="fg-out-${fg.code}" value="${d.output_units||''}" placeholder="0" min="0" oninput="costingCalcResults()"></td>
       <td><input type="number" class="costing-input" id="fg-rm-${fg.code}"  value="${d.raw_material_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcResults()"></td>
       ${pkCell}
       ${fgTrCell}
-    </tr>`;
+    </tr>
+    ${hasFgTrBOM ? `<tr id="fg-tr-expand-${fg.code}" style="display:none"><td colspan="7" style="padding:0"><div id="fg-tr-detail-${fg.code}" style="padding:12px 16px;background:var(--bg);font-size:12px;border-top:2px solid #b91c1c"></div></td></tr>` : ''}`;
   }).join('');
 
   COSTING_SEMI_FG.forEach(sf => costingCalcSemiFGRow(sf.code));
@@ -3662,6 +3664,51 @@ function costingToggleSFBOM(code) {
   const isHidden = row.style.display === 'none';
   row.style.display = isHidden ? '' : 'none';
   if (isHidden) costingRenderSFBOMDetail(code);
+}
+
+function costingToggleFGTransport(code) {
+  const row = document.getElementById(`fg-tr-expand-${code}`);
+  if (!row) return;
+  const isHidden = row.style.display === 'none';
+  row.style.display = isHidden ? '' : 'none';
+  if (isHidden) costingRenderFGTransportDetail(code);
+}
+
+function costingRenderFGTransportDetail(code) {
+  const el = document.getElementById(`fg-tr-detail-${code}`);
+  if (!el) return;
+  const bom = (costingBOM[code] || []).filter(b => b.category === 'transport');
+  if (!bom.length) { el.innerHTML = '<div style="color:var(--text-muted);padding:8px">No transport BOM data.</div>'; return; }
+  const out = Number(document.getElementById(`fg-out-${code}`)?.value) || 0;
+  const rows = bom.map(b => {
+    const ep = costingEffectivePrices[b.material_name] || {price:0, source:'missing', sourceLabel:'No price'};
+    const srcColor = ep.source==='this_month'?'var(--success)':ep.source==='fallback'?'#f59e0b':'var(--danger)';
+    const cpu = (Number(b.qty_per_pot)||0) * ep.price;
+    const total = cpu * out;
+    return `<tr style="border-top:1px solid var(--border)">
+      <td style="padding:4px 8px;color:#b91c1c">${b.material_name}</td>
+      <td style="padding:4px 8px;text-align:right">${b.qty_per_pot} ${b.uom}/unit</td>
+      <td style="padding:4px 8px;text-align:right"><span style="font-size:10px;color:${srcColor}">${ep.sourceLabel}</span><br>RM ${ep.price.toFixed(4)}/${b.uom}</td>
+      <td style="padding:4px 8px;text-align:right;font-weight:700;color:#b91c1c">RM ${cpu.toFixed(4)}</td>
+      <td style="padding:4px 8px;text-align:right;color:var(--text-muted)">RM ${total.toFixed(4)}</td>
+    </tr>`;
+  }).join('');
+  const totalCPU = bom.reduce((s,b) => s + (Number(b.qty_per_pot)||0) * (costingEffectivePrices[b.material_name]?.price||0), 0);
+  el.innerHTML = `<div style="color:#b91c1c;font-weight:700;font-size:11px;margin-bottom:6px"><i class="ti ti-truck" style="margin-right:4px"></i>Transport BOM — ${code}</div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead><tr style="background:#fee2e2">
+        <th style="padding:4px 8px;text-align:left;color:#b91c1c">Material</th>
+        <th style="padding:4px 8px;text-align:right;color:#b91c1c">Qty / Unit</th>
+        <th style="padding:4px 8px;text-align:right;color:#b91c1c">Unit Price</th>
+        <th style="padding:4px 8px;text-align:right;color:#b91c1c">Cost / Unit (RM)</th>
+        <th style="padding:4px 8px;text-align:right;color:#b91c1c">Total (${out} units)</th>
+      </tr></thead><tbody>${rows}</tbody>
+      <tfoot><tr style="border-top:2px solid #b91c1c">
+        <td colspan="3" style="padding:5px 8px;font-weight:700;color:#b91c1c">Total Transport CPU</td>
+        <td style="padding:5px 8px;text-align:right;font-weight:800;color:#b91c1c">RM ${totalCPU.toFixed(4)}</td>
+        <td style="padding:5px 8px;text-align:right;font-weight:800;color:#b91c1c">RM ${(totalCPU*out).toFixed(4)}</td>
+      </tr></tfoot>
+    </table>`;
 }
 
 function costingRenderSFBOMDetail(code) {
@@ -3706,22 +3753,32 @@ function costingRenderSFBOMDetail(code) {
   }
 
   const out = Number(document.getElementById(`sf-out-${code}`)?.value)||0;
-  const rows = bom.map(b => {
+
+  const makeRow = (b, isTransport) => {
     const ep = costingEffectivePrices[b.material_name] || {price:0, source:'missing', sourceLabel:'No price'};
     const srcColor = ep.source==='this_month'?'var(--success)':ep.source==='fallback'?'#f59e0b':'var(--danger)';
-    if (b.category === 'packaging') {
-      const lineCost = (Number(b.qty_per_pot)||0) * ep.price * out;
-      return `<tr style="border-top:1px solid var(--border)">
-        <td style="padding:4px 8px">${b.material_name}</td>
-        <td style="padding:4px 8px;text-align:right">${b.qty_per_pot} ${b.uom}/unit × ${out} units = ${((Number(b.qty_per_pot)||0)*out).toFixed(4)} ${b.uom}</td>
-        <td style="padding:4px 8px;text-align:right"><span style="font-size:10px;color:${srcColor}">${ep.sourceLabel}</span><br>RM ${ep.price.toFixed(4)}/${b.uom}</td>
-        <td style="padding:4px 8px;text-align:right;font-weight:700">RM ${lineCost.toFixed(4)}</td>
-      </tr>`;
-    }
+    const rowStyle = isTransport ? 'border-top:1px solid var(--border);color:#b91c1c' : 'border-top:1px solid var(--border)';
+    const tdStyle  = isTransport ? 'padding:4px 8px;color:#b91c1c' : 'padding:4px 8px';
+    const lineCost = (Number(b.qty_per_pot)||0) * ep.price * out;
+    return `<tr style="${rowStyle}">
+      <td style="${tdStyle}">${b.material_name}</td>
+      <td style="${tdStyle};text-align:right">${b.qty_per_pot} ${b.uom}/unit × ${out} units = ${((Number(b.qty_per_pot)||0)*out).toFixed(4)} ${b.uom}</td>
+      <td style="${tdStyle};text-align:right"><span style="font-size:10px;color:${srcColor}">${ep.sourceLabel}</span><br>RM ${ep.price.toFixed(4)}/${b.uom}</td>
+      <td style="${tdStyle};text-align:right;font-weight:700">RM ${lineCost.toFixed(4)}</td>
+    </tr>`;
+  };
+
+  const rmGsBom = bom.filter(b => b.category !== 'packaging' && b.category !== 'transport');
+  const pkBom   = bom.filter(b => b.category === 'packaging');
+  const trBom   = bom.filter(b => b.category === 'transport');
+
+  const rmGsRows = rmGsBom.map(b => {
+    const ep = costingEffectivePrices[b.material_name] || {price:0, source:'missing', sourceLabel:'No price'};
+    const srcColor = ep.source==='this_month'?'var(--success)':ep.source==='fallback'?'#f59e0b':'var(--danger)';
     const yld = costingGetEffectiveYield(b.material_name, Number(b.yield_pct)||100);
     const purchaseQty = (Number(b.qty_per_pot)||0) / (yld/100);
     const lineCost = purchaseQty * ep.price * pots;
-    const yieldNote = yld < 100 ? ` <span style="color:var(--text-muted)">(usable ${b.qty_per_pot} ${b.uom}, yield ${yld.toFixed(1)}%)</span>` : '';
+    const yieldNote = yld < 100 ? ` <span style="color:var(--text-muted)">(yield ${yld.toFixed(1)}%)</span>` : '';
     return `<tr style="border-top:1px solid var(--border)">
       <td style="padding:4px 8px">${b.material_name}${yieldNote}</td>
       <td style="padding:4px 8px;text-align:right">${purchaseQty.toFixed(4)} ${b.uom}/pot × ${pots} pots = ${(purchaseQty*pots).toFixed(4)} ${b.uom}</td>
@@ -3729,9 +3786,20 @@ function costingRenderSFBOMDetail(code) {
       <td style="padding:4px 8px;text-align:right;font-weight:700">RM ${lineCost.toFixed(4)}</td>
     </tr>`;
   }).join('');
+  const pkRows = pkBom.map(b => makeRow(b, false)).join('');
+  const trRows = trBom.map(b => makeRow(b, true)).join('');
+
+  const sectionHeader = (label, color='var(--text-muted)') =>
+    `<tr><td colspan="4" style="padding:4px 8px 2px;font-size:10px;font-weight:700;letter-spacing:.05em;color:${color};background:var(--bg)">${label}</td></tr>`;
+
+  let tableRows = '';
+  if (rmGsBom.length) tableRows += sectionHeader('RAW MATERIAL / COOKING GAS') + rmGsRows;
+  if (pkBom.length)   tableRows += sectionHeader('PACKAGING') + pkRows;
+  if (trBom.length)   tableRows += sectionHeader('TRANSPORT', '#b91c1c') + trRows;
+
   const total = bom.reduce((s,b) => {
     const ep = costingEffectivePrices[b.material_name] || {price:0};
-    if (b.category === 'packaging') return s + (Number(b.qty_per_pot)||0) * ep.price * out;
+    if (b.category === 'packaging' || b.category === 'transport') return s + (Number(b.qty_per_pot)||0) * ep.price * out;
     const yld = costingGetEffectiveYield(b.material_name, Number(b.yield_pct)||100);
     const pq = (Number(b.qty_per_pot)||0)/(yld/100);
     return s + pq * ep.price * pots;
@@ -3742,7 +3810,7 @@ function costingRenderSFBOMDetail(code) {
       <th style="padding:4px 8px;text-align:right">Qty</th>
       <th style="padding:4px 8px;text-align:right">Unit Price</th>
       <th style="padding:4px 8px;text-align:right">Cost</th>
-    </tr></thead><tbody>${rows}</tbody>
+    </tr></thead><tbody>${tableRows}</tbody>
     <tfoot><tr style="border-top:2px solid var(--border)">
       <td colspan="3" style="padding:5px 8px;font-weight:700">Total Cost</td>
       <td style="padding:5px 8px;text-align:right;font-weight:800;color:var(--accent)">RM ${total.toFixed(4)}</td>
@@ -3857,6 +3925,7 @@ function costingCalcResults() {
       tr = costingGetFGBOMCost(fg.code, out, 'transport') ?? 0;
       const trAutoEl = document.getElementById(`fg-tr-auto-${fg.code}`);
       if (trAutoEl) trAutoEl.textContent = out > 0 ? `RM ${tr.toFixed(4)}` : '—';
+      if (document.getElementById(`fg-tr-expand-${fg.code}`)?.style.display !== 'none') costingRenderFGTransportDetail(fg.code);
     } else {
       tr = Number(document.getElementById(`fg-tr-${fg.code}`)?.value)||0;
     }
