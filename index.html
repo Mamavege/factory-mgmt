@@ -3241,10 +3241,11 @@ async function costingLoadBOM() {
     const matName = row.costing_materials?.name ?? row.material_name ?? null;
     const uom     = row.costing_materials?.uom  ?? row.uom ?? '';
     const yieldPct = Number(row.yield_rate ?? row.yield_pct ?? 100);
-    const category = row.category ?? row.costing_materials?.category ?? 'raw_material';
+    const category         = row.category ?? row.costing_materials?.category ?? 'raw_material';
+    const material_category = row.costing_materials?.category ?? category;
     if (!code || !matName) return;
     if (!costingBOM[code]) costingBOM[code] = [];
-    costingBOM[code].push({ ...row, material_name: matName, uom, yield_pct: yieldPct, category });
+    costingBOM[code].push({ ...row, material_name: matName, uom, yield_pct: yieldPct, category, material_category });
   });
 }
 
@@ -3317,8 +3318,8 @@ async function costingLoadPrices(monthId) {
   }
 
   const allBOMFlat = Object.values(costingBOM).flat();
-  const nonTrMats = new Set(allBOMFlat.filter(b => b.category !== 'transport').map(b => b.material_name));
-  const trMats    = new Set(allBOMFlat.filter(b => b.category === 'transport').map(b => b.material_name));
+  const nonTrMats = new Set(allBOMFlat.filter(b => b.material_category !== 'transport').map(b => b.material_name));
+  const trMats    = new Set(allBOMFlat.filter(b => b.material_category === 'transport').map(b => b.material_name));
 
   costingEffectivePrices = buildPriceMap(nonTrMats, thisMonthAvg, lastKnown);
   costingTransportPrices = buildPriceMap(trMats, thisMonthAvgTr, lastKnownTr);
@@ -3337,7 +3338,7 @@ function costingGetSFBOMCost(code, pots, category, outputUnits) {
   if (!items.length) return null;
   const manualQtys = costingManualBomQty[code] || {};
   return items.reduce((total, b) => {
-    const priceMap = b.category === 'transport' ? costingTransportPrices : costingEffectivePrices;
+    const priceMap = b.material_category === 'transport' ? costingTransportPrices : costingEffectivePrices;
     if (isManualQty) {
       const qty = Number(manualQtys[b.id]) || 0;
       return total + qty * (priceMap[b.material_name]?.price||0);
@@ -3360,8 +3361,8 @@ function costingGetFGBOMCost(code, outputUnits, category) {
   if (!bom || !bom.length || !outputUnits) return null;
   const items = bom.filter(b => b.category === category);
   if (!items.length) return null;
-  const priceMap = category === 'transport' ? costingTransportPrices : costingEffectivePrices;
   return items.reduce((total, b) => {
+    const priceMap = b.material_category === 'transport' ? costingTransportPrices : costingEffectivePrices;
     return total + (Number(b.qty_per_pot)||0) * (priceMap[b.material_name]?.price||0) * outputUnits;
   }, 0);
 }
@@ -3729,7 +3730,7 @@ function costingRenderSFBOMDetail(code) {
   const out = Number(document.getElementById(`sf-out-${code}`)?.value)||0;
 
   const makeRow = (b, isTransport) => {
-    const priceMap = isTransport ? costingTransportPrices : costingEffectivePrices;
+    const priceMap = b.material_category === 'transport' ? costingTransportPrices : costingEffectivePrices;
     const ep = priceMap[b.material_name] || {price:0, source:'missing', sourceLabel:'No price data — enter purchase record'};
     const srcColor = ep.source==='this_month'?'var(--success)':ep.source==='fallback'?'#f59e0b':'var(--danger)';
     const rowStyle = isTransport ? 'border-top:1px solid var(--border);color:#b91c1c' : 'border-top:1px solid var(--border)';
@@ -4058,7 +4059,7 @@ function costingOpenProduct(type, code) {
     let pkRows = '';
     if (sfPkBom.length) {
       sfPkBom.forEach(b => {
-        const ep = costingEffectivePrices[b.material_name] || { price: 0 };
+        const ep = (b.material_category === 'transport' ? costingTransportPrices : costingEffectivePrices)[b.material_name] || { price: 0 };
         const cpu = (Number(b.qty_per_pot)||0) * ep.price;
         pkRows += tRow(b.material_name, cpu, `${b.qty_per_pot} ${b.uom}/unit, RM ${ep.price.toFixed(4)}/${b.uom}`);
       });
@@ -4124,7 +4125,7 @@ function costingOpenProduct(type, code) {
     let pkRows = '';
     if (fgBomItems.length) {
       fgBomItems.forEach(b => {
-        const ep = costingEffectivePrices[b.material_name] || { price: 0 };
+        const ep = (b.material_category === 'transport' ? costingTransportPrices : costingEffectivePrices)[b.material_name] || { price: 0 };
         const lineCost = (Number(b.qty_per_pot)||0) * ep.price * out;
         const lineCPU  = out > 0 ? lineCost / out : 0;
         pkRows += tRow(b.material_name, lineCPU, `${b.qty_per_pot} ${b.uom}/unit, RM ${ep.price.toFixed(4)}/${b.uom}`);
@@ -4152,7 +4153,7 @@ function costingOpenProduct(type, code) {
     if (fgTrBomItems.length) {
       let fgTrRows = '';
       fgTrBomItems.forEach(b => {
-        const ep = costingTransportPrices[b.material_name] || { price: 0, sourceLabel: 'No price data — enter transport purchase record' };
+        const ep = (b.material_category === 'transport' ? costingTransportPrices : costingEffectivePrices)[b.material_name] || { price: 0, sourceLabel: 'No price data — enter transport purchase record' };
         const srcColor = ep.source==='this_month'?'var(--success)':ep.source==='fallback'?'#f59e0b':'var(--danger)';
         const lineCPU = (Number(b.qty_per_pot)||0) * ep.price;
         fgTrRows += tRow(b.material_name, lineCPU, `${b.qty_per_pot} ${b.uom}/unit · <span style="color:${srcColor};font-size:10px">${ep.sourceLabel}</span>`);
