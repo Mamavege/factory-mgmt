@@ -3386,8 +3386,10 @@ function costingRenderPurchaseRecords() {
     const unitPrice = Number(r.unit_price);
     const total = qty * unitPrice;
     const uom = r.costing_materials?.uom ?? r.uom ?? '';
+    const cat = r.costing_materials?.category ?? '';
+    const catColor = cat==='packaging'?'#2563eb':cat==='transport'?'#dc2626':cat==='cooking_gas'?'#16a34a':'var(--text)';
     return `<tr style="border-top:1px solid var(--border)">
-    <td style="padding:6px 10px;font-weight:600">${r.costing_materials?.name ?? r.material_name ?? '—'}</td>
+    <td style="padding:6px 10px;font-weight:600;color:${catColor}">${r.costing_materials?.name ?? r.material_name ?? '—'}</td>
     <td style="padding:6px 10px;color:var(--text-muted)">${r.supplier||'—'}</td>
     <td style="padding:6px 10px;text-align:right">${qty.toFixed(3)}</td>
     <td style="padding:6px 10px">${uom}</td>
