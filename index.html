@@ -646,7 +646,10 @@
         <div class="card" style="margin-bottom:16px">
           <div class="card-header">
             <div class="card-title" style="margin:0">📦 Order Volume Calculator</div>
-            <button class="btn btn-secondary btn-sm" style="width:auto" onclick="addShipLine()"><i class="ti ti-plus"></i> Add Item</button>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-secondary btn-sm" style="width:auto" onclick="exportShipment()"><i class="ti ti-download"></i> Export CSV</button>
+              <button class="btn btn-primary btn-sm" style="width:auto" onclick="addShipLine()"><i class="ti ti-plus"></i> Add Item</button>
+            </div>
           </div>
           <div style="padding:12px 16px;overflow-x:auto">
             <table style="width:100%;min-width:560px">
@@ -697,6 +700,7 @@
               <thead><tr style="background:var(--bg)">
                 <th style="padding:8px 12px;font-size:11px;text-align:left">Item Code</th>
                 <th style="padding:8px 12px;font-size:11px;text-align:left">Name</th>
+                <th style="padding:8px 12px;font-size:11px;text-align:left">HS Code</th>
                 <th style="padding:8px 12px;font-size:11px;text-align:right">L (cm)</th>
                 <th style="padding:8px 12px;font-size:11px;text-align:right">W (cm)</th>
                 <th style="padding:8px 12px;font-size:11px;text-align:right">H (cm)</th>
@@ -2623,7 +2627,7 @@ async function saveWip() {
 let shipInv = [], shipLineSeq = 0;
 function ctnM3(it){ const l=parseFloat(it?.ctn_l)||0, w=parseFloat(it?.ctn_w)||0, h=parseFloat(it?.ctn_h)||0; return l*w*h/1e6; }
 async function loadShipment() {
-  const { data } = await sb.from('inventory').select('id,item_code,item_name,ctn_l,ctn_w,ctn_h,ctn_gross_kg,ctn_per_pallet').order('item_code');
+  const { data } = await sb.from('inventory').select('id,item_code,item_name,hs_code,ctn_l,ctn_w,ctn_h,ctn_gross_kg,ctn_per_pallet').order('item_code');
   shipInv = data || [];
   renderShipSizes();
   document.getElementById('ship-lines').innerHTML = '';
@@ -2639,6 +2643,7 @@ function renderShipSizes() {
   document.getElementById('ship-sizes').innerHTML = shipInv.map(it=>`<tr>
     <td style="padding:6px 12px;font-size:12px"><strong>${it.item_code}</strong></td>
     <td style="padding:6px 12px;font-size:12px">${it.item_name||''}</td>
+    <td style="padding:6px 12px"><input type="text" id="hs-${it.id}" value="${it.hs_code||''}" placeholder="HS code" style="width:110px"></td>
     <td style="padding:6px 12px;text-align:right"><input type="number" id="cl-${it.id}" value="${it.ctn_l??''}" min="0" step="0.1" style="width:62px;text-align:right"></td>
     <td style="padding:6px 12px;text-align:right"><input type="number" id="cw-${it.id}" value="${it.ctn_w??''}" min="0" step="0.1" style="width:62px;text-align:right"></td>
     <td style="padding:6px 12px;text-align:right"><input type="number" id="ch-${it.id}" value="${it.ctn_h??''}" min="0" step="0.1" style="width:62px;text-align:right"></td>
@@ -2654,9 +2659,10 @@ async function saveShipSize(id) {
   const h=parseFloat(document.getElementById('ch-'+id).value)||null;
   const g=parseFloat(document.getElementById('cg-'+id).value)||null;
   const p=parseFloat(document.getElementById('cp-'+id).value)||null;
-  const { error } = await sb.from('inventory').update({ctn_l:l,ctn_w:w,ctn_h:h,ctn_gross_kg:g,ctn_per_pallet:p}).eq('id',id);
+  const hs=document.getElementById('hs-'+id).value.trim()||null;
+  const { error } = await sb.from('inventory').update({ctn_l:l,ctn_w:w,ctn_h:h,ctn_gross_kg:g,ctn_per_pallet:p,hs_code:hs}).eq('id',id);
   if (error) return toast('Save failed: '+error.message,'error');
-  const it = shipInv.find(x=>x.id===id); if (it){ it.ctn_l=l; it.ctn_w=w; it.ctn_h=h; it.ctn_gross_kg=g; it.ctn_per_pallet=p; }
+  const it = shipInv.find(x=>x.id===id); if (it){ it.ctn_l=l; it.ctn_w=w; it.ctn_h=h; it.ctn_gross_kg=g; it.ctn_per_pallet=p; it.hs_code=hs; }
   document.getElementById('m3-'+id).textContent = ctnM3({ctn_l:l,ctn_w:w,ctn_h:h}).toFixed(4);
   toast('Saved'); recalcShip();
 }
@@ -2719,6 +2725,29 @@ function recalcShip() {
   document.getElementById('ship-pallets-used').textContent = usedPlt;
   document.getElementById('ship-total-pltm3').textContent = pltVol.toFixed(3)+' m³';
   try { localStorage.setItem('shipPallets', JSON.stringify(saved)); } catch(e){}
+}
+function exportShipment() {
+  const rows = [['Item Code','Item Name','HS Code','Cartons','Gross Weight (kg)','Volume (m³)']];
+  let totC=0, totWt=0, totM3=0;
+  document.querySelectorAll('#ship-lines tr').forEach(tr=>{
+    const it = shipInv.find(x=>x.id===tr.querySelector('.ship-item').value);
+    if (!it) return;
+    const qty = parseFloat(tr.querySelector('.ship-qty').value)||0;
+    if (!qty) return;
+    const gw = (parseFloat(it.ctn_gross_kg)||0)*qty;
+    const vol = ctnM3(it)*qty;
+    totC+=qty; totWt+=gw; totM3+=vol;
+    rows.push([it.item_code, it.item_name||'', it.hs_code||'', qty, gw.toFixed(1), vol.toFixed(3)]);
+  });
+  if (rows.length===1) return toast('Add items with quantities first','error');
+  rows.push(['TOTAL','','',totC,totWt.toFixed(1),totM3.toFixed(3)]);
+  const csv = rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'shipment.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 // ─── EQUIPMENT ──────────────────────────────────────
