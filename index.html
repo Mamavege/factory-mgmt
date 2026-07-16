@@ -655,6 +655,7 @@
             <table style="width:100%;min-width:560px">
               <thead><tr style="background:var(--bg)">
                 <th style="padding:8px 12px;font-size:11px;text-align:left">FG Item</th>
+                <th style="padding:8px 12px;font-size:11px;text-align:left">HS Code</th>
                 <th style="padding:8px 12px;font-size:11px;text-align:right">Carton m³</th>
                 <th style="padding:8px 12px;font-size:11px;text-align:right">Cartons</th>
                 <th style="padding:8px 12px;font-size:11px;text-align:right">Total m³</th>
@@ -2671,6 +2672,7 @@ function addShipLine() {
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td style="padding:6px 12px"><select onchange="recalcShip()" class="ship-item" style="width:100%">${opts}</select></td>
+    <td style="padding:6px 12px;font-size:12px" class="ship-hs">—</td>
     <td style="padding:6px 12px;text-align:right;font-size:12px" class="ship-m3ctn">—</td>
     <td style="padding:6px 12px;text-align:right"><input type="number" class="ship-qty" min="0" step="1" oninput="recalcShip()" style="width:80px;text-align:right"></td>
     <td style="padding:6px 12px;text-align:right;font-weight:700" class="ship-rowm3">0.000</td>
@@ -2698,6 +2700,7 @@ function recalcShip() {
     const gwc = parseFloat(it?.ctn_gross_kg)||0;
     const cpp = parseFloat(it?.ctn_per_pallet)||0;
     const qty = parseFloat(tr.querySelector('.ship-qty').value)||0;
+    tr.querySelector('.ship-hs').textContent = it ? (it.hs_code||'—') : '—';
     tr.querySelector('.ship-m3ctn').textContent = it ? m3c.toFixed(4) : '—';
     const rm = m3c*qty, rw = gwc*qty;
     const plt = cpp>0 ? Math.ceil(qty/cpp) : 0;
