@@ -2741,8 +2741,8 @@ function exportShipment() {
   });
   if (rows.length===1) return toast('Add items with quantities first','error');
   rows.push(['TOTAL','','',totC,totWt.toFixed(1),totM3.toFixed(3)]);
-  const csv = rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
+  const csv = 'sep=,\n' + rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8;'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'shipment.csv';
