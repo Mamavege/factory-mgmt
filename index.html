@@ -3284,16 +3284,8 @@ async function costingNewMonth() {
 }
 
 async function costingLoadAllMaterials() {
-  const { data } = await sb.from('costing_materials').select('id, name, uom, category').order('name');
-  // Deduplicate by name — prefer transport over packaging, then packaging over raw
-  const seen = {};
-  const catRank = { transport: 3, packaging: 2, cooking_gas: 1, raw_material: 0 };
-  (data || []).forEach(m => {
-    if (!seen[m.name] || (catRank[m.category] || 0) > (catRank[seen[m.name].category] || 0)) {
-      seen[m.name] = m;
-    }
-  });
-  costingAllMaterials = Object.values(seen).sort((a, b) => a.name.localeCompare(b.name));
+  const { data } = await sb.from('costing_materials').select('id, name, uom, category, item_code').order('name');
+  costingAllMaterials = data || [];
 }
 
 async function costingLoadBOM() {
@@ -3528,7 +3520,7 @@ function costingMaterialSearch(q) {
     dd.innerHTML = matches.map(m =>
       `<div style="padding:9px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)"
         onmousedown="costingSelectMaterial('${m.id}','${m.name.replace(/'/g,"\\'")}','${m.uom||''}')"
-        onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">${m.name} <span style="color:var(--text-muted);font-size:11px">${m.uom||''}</span></div>`
+        onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">${m.item_code?`<span style="color:var(--text-muted);font-size:11px;margin-right:6px">${m.item_code}</span>`:''}${m.name} <span style="color:var(--text-muted);font-size:11px">${m.uom||''}</span></div>`
     ).join('');
   }
   dd.style.display = 'block';
