@@ -3825,7 +3825,8 @@ function costingRenderSFBOMDetail(code) {
     const yld = costingGetEffectiveYield(b.material_name, Number(b.yield_pct)||100);
     const purchaseQty = (Number(b.qty_per_pot)||0) / (yld/100);
     const lineCost = purchaseQty * ep.price * pots;
-    const yieldNote = yld < 100 ? ` <span style="color:var(--text-muted)">(yield ${yld.toFixed(1)}%)</span>` : '';
+    const hasYieldEntry = YIELD_RATE_MATERIALS.some(m => m.name.toLowerCase() === b.material_name.toLowerCase().trim());
+    const yieldNote = hasYieldEntry ? ` <span style="color:var(--accent);font-size:10px">(yield ${yld.toFixed(1)}%)</span>` : '';
     return `<tr style="border-top:1px solid var(--border)">
       <td style="padding:4px 8px">${b.material_name}${yieldNote}</td>
       <td style="padding:4px 8px;text-align:right">${purchaseQty.toFixed(4)} ${b.uom}/pot × ${pots} pots = ${(purchaseQty*pots).toFixed(4)} ${b.uom}</td>
@@ -3845,7 +3846,8 @@ function costingRenderSFBOMDetail(code) {
     const yld = costingGetEffectiveYield(b.material_name, Number(b.yield_pct)||100);
     const purchaseQty = (Number(b.qty_per_pot)||0) / (yld/100);
     const lineCost = purchaseQty * ep.price * pots;
-    const yieldNote = yld < 100 ? ` <span style="color:var(--text-muted)">(yield ${yld.toFixed(1)}%)</span>` : '';
+    const hasYieldEntry = YIELD_RATE_MATERIALS.some(m => m.name.toLowerCase() === b.material_name.toLowerCase().trim());
+    const yieldNote = hasYieldEntry ? ` <span style="color:var(--accent);font-size:10px">(yield ${yld.toFixed(1)}%)</span>` : '';
     return `<tr style="border-top:1px solid var(--border)">
       <td style="padding:4px 8px">${b.material_name}${yieldNote}</td>
       <td style="padding:4px 8px;text-align:right">${purchaseQty.toFixed(4)} ${b.uom}/pot × ${pots} pots = ${(purchaseQty*pots).toFixed(4)} ${b.uom}</td>
