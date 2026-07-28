@@ -944,7 +944,7 @@
                   <th>Raw Mat (RM)</th>
                   <th>Packaging (RM)</th>
                   <th>Transport (RM)</th>
-                  <th>Cooking Gas (RM)</th>
+                  <th>Utility (RM)</th>
                   <th style="background:#f0fdf4">Cost / Unit (RM)</th>
                 </tr></thead>
                 <tbody id="costing-semi-fg-tbody"></tbody>
@@ -3806,9 +3806,11 @@ function costingRenderSFBOMDetail(code) {
     </tr>`;
   };
 
-  const rmGsBom = bom.filter(b => b.category !== 'packaging' && b.category !== 'transport');
-  const pkBom   = bom.filter(b => b.category === 'packaging');
-  const trBom   = bom.filter(b => b.category === 'transport');
+  const rmBom    = bom.filter(b => b.category === 'raw_material');
+  const gsBom    = bom.filter(b => b.category === 'cooking_gas');
+  const rmGsBom  = bom.filter(b => b.category === 'raw_material' || b.category === 'cooking_gas');
+  const pkBom    = bom.filter(b => b.category === 'packaging');
+  const trBom    = bom.filter(b => b.category === 'transport');
 
   const rmGsRows = rmGsBom.map(b => {
     const ep = costingEffectivePrices[b.material_name] || {price:0, source:'missing', sourceLabel:'No price'};
@@ -3830,8 +3832,37 @@ function costingRenderSFBOMDetail(code) {
   const sectionHeader = (label, color='var(--text-muted)') =>
     `<tr><td colspan="4" style="padding:4px 8px 2px;font-size:10px;font-weight:700;letter-spacing:.05em;color:${color};background:var(--bg)">${label}</td></tr>`;
 
+  const rmRows = rmBom.map(b => {
+    const ep = costingEffectivePrices[b.material_name] || {price:0, source:'missing', sourceLabel:'No price'};
+    const srcColor = ep.source==='this_month'?'var(--success)':ep.source==='fallback'?'#f59e0b':'var(--danger)';
+    const yld = costingGetEffectiveYield(b.material_name, Number(b.yield_pct)||100);
+    const purchaseQty = (Number(b.qty_per_pot)||0) / (yld/100);
+    const lineCost = purchaseQty * ep.price * pots;
+    const yieldNote = yld < 100 ? ` <span style="color:var(--text-muted)">(yield ${yld.toFixed(1)}%)</span>` : '';
+    return `<tr style="border-top:1px solid var(--border)">
+      <td style="padding:4px 8px">${b.material_name}${yieldNote}</td>
+      <td style="padding:4px 8px;text-align:right">${purchaseQty.toFixed(4)} ${b.uom}/pot × ${pots} pots = ${(purchaseQty*pots).toFixed(4)} ${b.uom}</td>
+      <td style="padding:4px 8px;text-align:right"><span style="font-size:10px;color:${srcColor}">${ep.sourceLabel}</span><br>RM ${ep.price.toFixed(4)}/${b.uom}</td>
+      <td style="padding:4px 8px;text-align:right;font-weight:700">RM ${lineCost.toFixed(4)}</td>
+    </tr>`;
+  }).join('');
+  const gsRows = gsBom.map(b => {
+    const ep = costingEffectivePrices[b.material_name] || {price:0, source:'missing', sourceLabel:'No price'};
+    const srcColor = ep.source==='this_month'?'var(--success)':ep.source==='fallback'?'#f59e0b':'var(--danger)';
+    const yld = costingGetEffectiveYield(b.material_name, Number(b.yield_pct)||100);
+    const purchaseQty = (Number(b.qty_per_pot)||0) / (yld/100);
+    const lineCost = purchaseQty * ep.price * pots;
+    return `<tr style="border-top:1px solid var(--border)">
+      <td style="padding:4px 8px;color:#16a34a">${b.material_name}</td>
+      <td style="padding:4px 8px;text-align:right;color:#16a34a">${purchaseQty.toFixed(4)} ${b.uom}/pot × ${pots} pots = ${(purchaseQty*pots).toFixed(4)} ${b.uom}</td>
+      <td style="padding:4px 8px;text-align:right;color:#16a34a"><span style="font-size:10px;color:${srcColor}">${ep.sourceLabel}</span><br>RM ${ep.price.toFixed(4)}/${b.uom}</td>
+      <td style="padding:4px 8px;text-align:right;font-weight:700;color:#16a34a">RM ${lineCost.toFixed(4)}</td>
+    </tr>`;
+  }).join('');
+
   let tableRows = '';
-  if (rmGsBom.length) tableRows += sectionHeader('RAW MATERIAL / COOKING GAS') + rmGsRows;
+  if (rmBom.length)   tableRows += sectionHeader('RAW MATERIAL') + rmRows;
+  if (gsBom.length)   tableRows += sectionHeader('UTILITY', '#16a34a') + gsRows;
   if (pkBom.length)   tableRows += sectionHeader('PACKAGING') + pkRows;
   if (trBom.length)   tableRows += sectionHeader('TRANSPORT', '#b91c1c') + trRows;
 
@@ -4132,7 +4163,7 @@ function costingOpenProduct(type, code) {
     topCards += miniCard('<i class="ti ti-package" style="margin-right:4px"></i>Packaging', pkRows, pkCPU);
 
     // Other cost cards (no labour/utilities — those are allocated at FG level)
-    if (gs > 0) bottomCards += miniCard('<i class="ti ti-flame" style="margin-right:4px"></i>Cooking Gas', tRow('Cooking gas', gsCPU, `RM ${gs.toFixed(2)} ÷ ${out.toLocaleString()} units`), gsCPU);
+    if (gs > 0) bottomCards += miniCard('<i class="ti ti-flame" style="margin-right:4px"></i>Utility', tRow('Utility', gsCPU, `RM ${gs.toFixed(2)} ÷ ${out.toLocaleString()} units`), gsCPU);
     if (tr > 0) {
       let sfTrRows = '';
       if (sfTrBom.length) {
