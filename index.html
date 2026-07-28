@@ -3603,7 +3603,7 @@ function costingEditPurchaseRecord(id) {
   document.getElementById('cp-price').value = (Number(r.qty_purchased) * Number(r.unit_price)).toFixed(2);
 
   const mat = costingAllMaterials.find(m => m.id === r.material_id);
-  const cat = mat?.category === 'packaging' ? 'packaging' : 'raw_material';
+  const cat = r.category ?? mat?.category ?? 'raw_material';
   costingFilterMaterialsByCategory(cat);
   document.getElementById('cp-material').value = r.material_id;
   document.getElementById('cp-material-search').value = r.costing_materials?.name ?? mat?.name ?? '';
