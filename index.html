@@ -4256,7 +4256,7 @@ function costingOpenProduct(type, code) {
     if (fgTrBomItems.length) {
       let fgTrRows = '';
       fgTrBomItems.forEach(b => {
-        const ep = costingEffectivePrices[b.material_name] || { price: 0, sourceLabel: 'No price data — enter purchase record' };
+        const ep = costingTransportPrices[b.material_name] || { price: 0, sourceLabel: 'No price data — enter purchase record' };
         const srcColor = ep.source==='this_month'?'var(--success)':ep.source==='fallback'?'#f59e0b':'var(--danger)';
         const lineCPU = (Number(b.qty_per_pot)||0) * ep.price;
         fgTrRows += tRow(b.material_name, lineCPU, `${b.qty_per_pot} ${b.uom}/unit · <span style="color:${srcColor};font-size:10px">${ep.sourceLabel}</span>`);
