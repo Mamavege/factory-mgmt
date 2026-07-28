@@ -3159,10 +3159,14 @@ const YIELD_RATE_MATERIALS = [
 let costingYieldReadings = {}; // kept for DB compat (stores simple {name: pct})
 
 function costingGetEffectiveYield(materialName, bomYieldPct) {
-  const entry = YIELD_RATE_MATERIALS.find(m => m.name === materialName);
+  const lower = (materialName||'').toLowerCase().trim();
+  const entry = YIELD_RATE_MATERIALS.find(m => m.name.toLowerCase() === lower);
   if (!entry) return bomYieldPct;
-  const val = Number(document.getElementById(entry.id)?.value);
-  return val > 0 ? val : bomYieldPct;
+  const domVal = Number(document.getElementById(entry.id)?.value);
+  if (domVal > 0) return domVal;
+  const savedVal = Number(costingYieldReadings[entry.name]);
+  if (savedVal > 0) return savedVal;
+  return entry.default || bomYieldPct;
 }
 
 function costingRenderYieldRates() {
@@ -3650,6 +3654,8 @@ async function costingOpenMonth(id) {
   document.getElementById('cm-rental').value         = month.total_rental_cost || '';
 
   try { costingYieldReadings = month.yield_readings ? JSON.parse(month.yield_readings) : {}; } catch(e) { costingYieldReadings = {}; }
+  // Seed defaults for any yield material not yet saved
+  YIELD_RATE_MATERIALS.forEach(m => { if (!(m.name in costingYieldReadings)) costingYieldReadings[m.name] = m.default; });
   costingRenderPurchaseRecords();
   costingRenderEffectivePrices();
   costingRenderYieldRates();
