@@ -3795,8 +3795,9 @@ function costingRenderSFBOMDetail(code) {
     const priceMap = isTransport ? costingTransportPrices : costingEffectivePrices;
     const ep = priceMap[b.material_name] || {price:0, source:'missing', sourceLabel:'No price data — enter purchase record'};
     const srcColor = ep.source==='this_month'?'var(--success)':ep.source==='fallback'?'#f59e0b':'var(--danger)';
-    const rowStyle = isTransport ? 'border-top:1px solid var(--border);color:#b91c1c' : 'border-top:1px solid var(--border)';
-    const tdStyle  = isTransport ? 'padding:4px 8px;color:#b91c1c' : 'padding:4px 8px';
+    const rowColor = isTransport ? '#b91c1c' : b.category === 'packaging' ? '#2563eb' : 'inherit';
+    const rowStyle = `border-top:1px solid var(--border);color:${rowColor}`;
+    const tdStyle  = `padding:4px 8px;color:${rowColor}`;
     const lineCost = (Number(b.qty_per_pot)||0) * ep.price * out;
     return `<tr style="${rowStyle}">
       <td style="${tdStyle}">${b.material_name}</td>
