@@ -3455,7 +3455,13 @@ function costingRenderPurchaseRecords() {
       <button class="btn btn-danger btn-sm" style="padding:2px 7px;font-size:11px" onclick="costingDeletePurchaseRecord('${r.id}')"><i class="ti ti-trash"></i></button>
     </td>
   </tr>`;}).join('');
-  el.innerHTML = `<div style="max-height:220px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+  el.innerHTML = `
+    <div style="padding:6px 0 8px">
+      <input id="cp-records-search" type="text" placeholder="🔍  Search material, item code, supplier…"
+        class="costing-input" style="width:100%;font-size:12px;padding:6px 10px"
+        oninput="costingFilterPurchaseRecords(this.value)">
+    </div>
+    <div style="max-height:220px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:12px" id="cp-records-table">
     <thead style="position:sticky;top:0;z-index:1;background:var(--bg)"><tr>
       <th style="padding:6px 10px;text-align:left">Item Code</th>
       <th style="padding:6px 10px;text-align:left">Material</th>
@@ -3466,6 +3472,16 @@ function costingRenderPurchaseRecords() {
       <th style="padding:6px 10px;text-align:right">Unit Price (auto)</th>
       <th style="padding:6px 10px"></th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function costingFilterPurchaseRecords(q) {
+  const tbody = document.querySelector('#cp-records-table tbody');
+  if (!tbody) return;
+  const term = q.trim().toLowerCase();
+  tbody.querySelectorAll('tr').forEach(tr => {
+    const text = tr.textContent.toLowerCase();
+    tr.style.display = (!term || text.includes(term)) ? '' : 'none';
+  });
 }
 
 function costingRenderEffectivePrices() {
