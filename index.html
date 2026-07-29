@@ -3719,20 +3719,24 @@ async function costingOpenMonth(id) {
     const d = fgMap[fg.code] || {};
     const sfBadges = fg.semiFG.map(c=>`<span class="badge badge-gray" style="font-size:10px;margin:1px">${c}</span>`).join('');
     const fgBom = costingBOM[fg.code] || [];
+    const hasFgRmBOM = fgBom.some(b => b.category === 'raw_material');
     const hasFgPkBOM = fgBom.some(b => b.category === 'packaging');
     const hasFgTrBOM = fgBom.some(b => b.category === 'transport');
+    const rmCell = hasFgRmBOM
+      ? `<td style="min-width:110px"><div style="font-weight:700;color:var(--text)" id="fg-rm-auto-${fg.code}">${d.raw_material_cost > 0 ? 'RM ' + Number(d.raw_material_cost).toFixed(4) : '—'}</div><div style="font-size:10px;color:var(--text-muted)">auto from BOM</div></td>`
+      : `<td><input type="number" class="costing-input" id="fg-rm-${fg.code}" value="${d.raw_material_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcResults()"></td>`;
     const pkCell = hasFgPkBOM
-      ? `<td style="min-width:110px"><div style="font-weight:700;color:var(--accent)" id="fg-pk-auto-${fg.code}">—</div><div style="font-size:10px;color:var(--text-muted)">auto from BOM</div></td>`
+      ? `<td style="min-width:110px"><div style="font-weight:700;color:var(--accent)" id="fg-pk-auto-${fg.code}">${d.packaging_cost > 0 ? 'RM ' + Number(d.packaging_cost).toFixed(4) : '—'}</div><div style="font-size:10px;color:var(--text-muted)">auto from BOM</div></td>`
       : `<td><input type="number" class="costing-input" id="fg-pk-${fg.code}" value="${d.packaging_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcResults()"></td>`;
     const fgTrCell = hasFgTrBOM
-      ? `<td style="min-width:110px"><div style="font-weight:700;color:#b91c1c" id="fg-tr-auto-${fg.code}">—</div><div style="font-size:10px;color:var(--text-muted)">auto from BOM</div></td>`
+      ? `<td style="min-width:110px"><div style="font-weight:700;color:#b91c1c" id="fg-tr-auto-${fg.code}">${d.transport_cost > 0 ? 'RM ' + Number(d.transport_cost).toFixed(4) : '—'}</div><div style="font-size:10px;color:var(--text-muted)">auto from BOM</div></td>`
       : `<td><input type="number" class="costing-input" id="fg-tr-${fg.code}" value="${d.transport_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcResults()"></td>`;
     return `<tr>
       <td style="white-space:nowrap"><span class="badge badge-info">${fg.code}</span>${fg.outsourced?` <span class="badge badge-warning" style="font-size:10px">Outsourced</span>`:''}</td>
       <td style="font-size:12px;min-width:180px"><a href="#" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:3px" onclick="costingOpenProduct('fg','${fg.code}');event.preventDefault()">${fg.name}</a></td>
       <td style="max-width:160px">${sfBadges||'<span style="color:var(--text-muted);font-size:11px">—</span>'}</td>
       <td><input type="number" class="costing-input" id="fg-out-${fg.code}" value="${d.output_units||''}" placeholder="0" min="0" oninput="costingCalcResults()"></td>
-      <td><input type="number" class="costing-input" id="fg-rm-${fg.code}"  value="${d.raw_material_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcResults()"></td>
+      ${rmCell}
       ${pkCell}
       ${fgTrCell}
     </tr>`;
@@ -3987,10 +3991,18 @@ function costingCalcResults() {
   const tbody = document.getElementById('costing-results-tbody');
   tbody.innerHTML = COSTING_FG.map(fg => {
     const out   = Number(document.getElementById(`fg-out-${fg.code}`)?.value)||0;
-    const rm    = Number(document.getElementById(`fg-rm-${fg.code}`)?.value)||0;
     const fgBom = costingBOM[fg.code] || [];
+    const hasFgRmBOM = fgBom.some(b => b.category === 'raw_material');
     const hasFgPkBOM = fgBom.some(b => b.category === 'packaging');
     const hasFgTrBOM = fgBom.some(b => b.category === 'transport');
+    let rm;
+    if (hasFgRmBOM) {
+      rm = costingGetFGBOMCost(fg.code, out, 'raw_material') ?? 0;
+      const rmAutoEl = document.getElementById(`fg-rm-auto-${fg.code}`);
+      if (rmAutoEl) rmAutoEl.textContent = out > 0 ? `RM ${rm.toFixed(4)}` : '—';
+    } else {
+      rm = Number(document.getElementById(`fg-rm-${fg.code}`)?.value)||0;
+    }
     let pk;
     if (hasFgPkBOM) {
       pk = costingGetFGBOMCost(fg.code, out, 'packaging') ?? 0;
@@ -4314,8 +4326,12 @@ async function costingSaveAll(silent = false) {
   const fgRows = COSTING_FG.map(fg => {
     const fgOut = Number(document.getElementById(`fg-out-${fg.code}`)?.value)||0;
     const fgBom = costingBOM[fg.code] || [];
+    const hasFgRmBOM = fgBom.some(b => b.category === 'raw_material');
     const hasFgPkBOM = fgBom.some(b => b.category === 'packaging');
     const hasFgTrBOM = fgBom.some(b => b.category === 'transport');
+    const fgRm = hasFgRmBOM
+      ? (costingGetFGBOMCost(fg.code, fgOut, 'raw_material') ?? 0)
+      : Number(document.getElementById(`fg-rm-${fg.code}`)?.value)||0;
     const fgPk = hasFgPkBOM
       ? (costingGetFGBOMCost(fg.code, fgOut, 'packaging') ?? 0)
       : Number(document.getElementById(`fg-pk-${fg.code}`)?.value)||0;
@@ -4325,7 +4341,7 @@ async function costingSaveAll(silent = false) {
     return {
       month_id: costingCurrentMonthId, code: fg.code,
       output_units:      fgOut,
-      raw_material_cost: Number(document.getElementById(`fg-rm-${fg.code}`)?.value)||0,
+      raw_material_cost: fgRm,
       packaging_cost:    fgPk,
       transport_cost:    fgTr,
       cost_per_unit:     costingFGCostPerUnit[fg.code] || 0,
