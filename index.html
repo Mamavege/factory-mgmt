@@ -3747,6 +3747,7 @@ async function costingOpenMonth(id) {
   document.getElementById('costing-list-view').style.display = 'none';
   document.getElementById('costing-detail-view').style.display = 'block';
   costingCalcResults();
+  costingScheduleAutoSave();
 }
 
 function costingToggleSFBOM(code) {
