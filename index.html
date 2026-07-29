@@ -3798,7 +3798,7 @@ function costingRenderSFBOMDetail(code) {
       return `<tr style="border-top:1px solid var(--border)">
         <td style="padding:4px 8px">${b.material_name}</td>
         <td style="padding:4px 8px;text-align:right">
-          <input type="number" class="costing-input" style="width:90px;text-align:right" value="${qty||''}" placeholder="0" min="0" step="0.001"
+          <input type="number" class="costing-input" style="width:120px;text-align:right" value="${qty||''}" placeholder="0" min="0" step="0.001"
             oninput="costingManualBomQtyChanged('${code}','${b.id}',this.value)"> ${b.uom}
         </td>
         <td style="padding:4px 8px;text-align:right"><span style="font-size:10px;color:${srcColor}">${ep.sourceLabel}</span><br>RM ${ep.price.toFixed(4)}/${b.uom}</td>
