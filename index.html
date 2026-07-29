@@ -3724,18 +3724,18 @@ async function costingOpenMonth(id) {
     const hasFgTrBOM = fgBom.some(b => b.category === 'transport');
     const rmCell = hasFgRmBOM
       ? `<td style="min-width:110px"><div style="font-weight:700;color:var(--text)" id="fg-rm-auto-${fg.code}">${d.raw_material_cost > 0 ? 'RM ' + Number(d.raw_material_cost).toFixed(4) : '—'}</div><div style="font-size:10px;color:var(--text-muted)">auto from BOM</div></td>`
-      : `<td><input type="number" class="costing-input" id="fg-rm-${fg.code}" value="${d.raw_material_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcResults()"></td>`;
+      : `<td><input type="number" class="costing-input" id="fg-rm-${fg.code}" value="${d.raw_material_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcResults();costingScheduleAutoSave()"></td>`;
     const pkCell = hasFgPkBOM
       ? `<td style="min-width:110px"><div style="font-weight:700;color:var(--accent)" id="fg-pk-auto-${fg.code}">${d.packaging_cost > 0 ? 'RM ' + Number(d.packaging_cost).toFixed(4) : '—'}</div><div style="font-size:10px;color:var(--text-muted)">auto from BOM</div></td>`
-      : `<td><input type="number" class="costing-input" id="fg-pk-${fg.code}" value="${d.packaging_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcResults()"></td>`;
+      : `<td><input type="number" class="costing-input" id="fg-pk-${fg.code}" value="${d.packaging_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcResults();costingScheduleAutoSave()"></td>`;
     const fgTrCell = hasFgTrBOM
       ? `<td style="min-width:110px"><div style="font-weight:700;color:#b91c1c" id="fg-tr-auto-${fg.code}">${d.transport_cost > 0 ? 'RM ' + Number(d.transport_cost).toFixed(4) : '—'}</div><div style="font-size:10px;color:var(--text-muted)">auto from BOM</div></td>`
-      : `<td><input type="number" class="costing-input" id="fg-tr-${fg.code}" value="${d.transport_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcResults()"></td>`;
+      : `<td><input type="number" class="costing-input" id="fg-tr-${fg.code}" value="${d.transport_cost||''}" placeholder="0.00" step="0.01" min="0" oninput="costingCalcResults();costingScheduleAutoSave()"></td>`;
     return `<tr>
       <td style="white-space:nowrap"><span class="badge badge-info">${fg.code}</span>${fg.outsourced?` <span class="badge badge-warning" style="font-size:10px">Outsourced</span>`:''}</td>
       <td style="font-size:12px;min-width:180px"><a href="#" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:3px" onclick="costingOpenProduct('fg','${fg.code}');event.preventDefault()">${fg.name}</a></td>
       <td style="max-width:160px">${sfBadges||'<span style="color:var(--text-muted);font-size:11px">—</span>'}</td>
-      <td><input type="number" class="costing-input" id="fg-out-${fg.code}" value="${d.output_units||''}" placeholder="0" min="0" oninput="costingCalcResults()"></td>
+      <td><input type="number" class="costing-input" id="fg-out-${fg.code}" value="${d.output_units||''}" placeholder="0" min="0" oninput="costingCalcResults();costingScheduleAutoSave()"></td>
       ${rmCell}
       ${pkCell}
       ${fgTrCell}
