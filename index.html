@@ -3683,7 +3683,7 @@ async function costingOpenMonth(id) {
 
     const autoCell = (autoId, manualId, savedVal) =>
       `<td style="min-width:110px">
-         <div style="font-weight:700;color:var(--accent)" id="${autoId}">—</div>
+         <div style="font-weight:700;color:var(--accent)" id="${autoId}">${savedVal > 0 ? 'RM ' + Number(savedVal).toFixed(4) : '—'}</div>
          <div style="font-size:10px;color:var(--text-muted)">auto from BOM</div>
        </td>`;
     const manualCell = (manualId, savedVal) =>
@@ -3750,7 +3750,7 @@ function costingToggleSFBOM(code) {
   if (!row) return;
   const isHidden = row.style.display === 'none';
   row.style.display = isHidden ? '' : 'none';
-  if (isHidden) costingRenderSFBOMDetail(code);
+  if (isHidden) { costingCalcSemiFGRow(code); costingRenderSFBOMDetail(code); }
 }
 
 
