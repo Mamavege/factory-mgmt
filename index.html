@@ -4064,6 +4064,8 @@ function costingBackToList() {
 function costingBackToDetail() {
   document.getElementById('costing-product-view').style.display = 'none';
   document.getElementById('costing-detail-view').style.display = 'block';
+  document.querySelector('.sidebar').style.display = '';
+  document.querySelector('.main').style.marginLeft = '';
 }
 
 function costingOpenProduct(type, code) {
@@ -4075,6 +4077,8 @@ function costingOpenProduct(type, code) {
 
   document.getElementById('costing-detail-view').style.display = 'none';
   document.getElementById('costing-product-view').style.display = 'block';
+  document.querySelector('.sidebar').style.display = 'none';
+  document.querySelector('.main').style.marginLeft = '0';
   document.getElementById('cpv-title').textContent = product.name;
   document.getElementById('cpv-badge').innerHTML = isSemi
     ? `<span class="badge badge-purple">${code}</span> <span class="badge badge-gray" style="font-size:10px">Semi FG</span>`
