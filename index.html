@@ -4202,13 +4202,16 @@ function costingOpenProduct(type, code) {
   } else {
     const fg = product;
     const out = Number(document.getElementById(`fg-out-${code}`)?.value) || 0;
-    const rm  = Number(document.getElementById(`fg-rm-${code}`)?.value) || 0;
     const fgBomAll = costingBOM[code] || [];
-    const hasFgPkBOM = fgBomAll.some(b => b.category === 'packaging');
+    const hasFgRmBOM2 = fgBomAll.some(b => b.category === 'raw_material');
+    const hasFgPkBOM  = fgBomAll.some(b => b.category === 'packaging');
+    const hasFgTrBOM2 = fgBomAll.some(b => b.category === 'transport');
+    const rm  = hasFgRmBOM2
+      ? (costingGetFGBOMCost(code, out, 'raw_material') ?? 0)
+      : Number(document.getElementById(`fg-rm-${code}`)?.value) || 0;
     const pk  = hasFgPkBOM
       ? (costingGetFGBOMCost(code, out, 'packaging') ?? 0)
       : Number(document.getElementById(`fg-pk-${code}`)?.value) || 0;
-    const hasFgTrBOM2 = fgBomAll.some(b => b.category === 'transport');
     const tr  = hasFgTrBOM2
       ? (costingGetFGBOMCost(code, out, 'transport') ?? 0)
       : Number(document.getElementById(`fg-tr-${code}`)?.value) || 0;
@@ -4233,7 +4236,18 @@ function costingOpenProduct(type, code) {
     totalCPU = sfTotalCPU + rmCPU + pkCPU + trCPU + fgLabour + fgUtil + fgRent;
 
     // Raw Materials card
-    topCards += miniCard('<i class="ti ti-plant-2" style="margin-right:4px"></i>Raw Materials', tRow('Raw material cost', rmCPU, out > 0 ? `RM ${rm.toFixed(2)} ÷ ${out.toLocaleString()} units` : 'No output entered'), rmCPU);
+    const fgRmBomItems = fgBomAll.filter(b => b.category === 'raw_material');
+    let rmRows = '';
+    if (fgRmBomItems.length) {
+      fgRmBomItems.forEach(b => {
+        const ep = costingEffectivePrices[b.material_name] || { price: 0 };
+        const lineCPU = (Number(b.qty_per_pot)||0) * ep.price;
+        rmRows += tRow(b.material_name, lineCPU, `${b.qty_per_pot} ${b.uom}/unit, RM ${ep.price.toFixed(4)}/${b.uom}`);
+      });
+    } else {
+      rmRows = tRow('Raw material cost', rmCPU, out > 0 ? `RM ${rm.toFixed(2)} ÷ ${out.toLocaleString()} units` : 'No output entered');
+    }
+    topCards += miniCard('<i class="ti ti-plant-2" style="margin-right:4px"></i>Raw Materials', rmRows, rmCPU);
 
     // Packaging card
     const fgBomItems = fgBomAll.filter(b => b.category === 'packaging');
