@@ -3987,7 +3987,9 @@ function costingCalcSemiFGRow(code) {
 
   if (document.getElementById(`sf-rm-auto-${code}`) &&
       document.getElementById(`sf-bom-expand-${code}`)?.style.display !== 'none') {
-    costingRenderSFBOMDetail(code);
+    const bomDetailEl = document.getElementById(`sf-bom-detail-${code}`);
+    const focusInDetail = bomDetailEl && bomDetailEl.contains(document.activeElement);
+    if (!focusInDetail) costingRenderSFBOMDetail(code);
   }
 
   const cpu = out > 0 ? (rm+pk+tr+gs)/out : 0;
