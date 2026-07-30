@@ -4073,7 +4073,8 @@ function costingCalcResults() {
     const fgLabour = fg.noSharedCosts ? 0 : labourRate;
     const fgUtil   = fg.noSharedCosts ? 0 : utilRate;
     const fgRent   = fg.noSharedCosts ? 0 : rentRate;
-    const totalCPU = sfCost+rmCPU+pkCPU+trCPU+fgLabour+fgUtil+fgRent;
+    const outsourcedLabour = fg.outsourced ? 1 : 0;
+    const totalCPU = sfCost+rmCPU+pkCPU+trCPU+fgLabour+outsourcedLabour+fgUtil+fgRent;
     costingFGCostPerUnit[fg.code] = out > 0 ? totalCPU : 0;
     return `<tr>
       <td><span class="badge badge-info">${fg.code}</span></td>
@@ -4280,7 +4281,8 @@ function costingOpenProduct(type, code) {
     const fgLabour = fg.noSharedCosts ? 0 : labourRate;
     const fgUtil   = fg.noSharedCosts ? 0 : utilRate;
     const fgRent   = fg.noSharedCosts ? 0 : rentRate;
-    totalCPU = sfTotalCPU + rmCPU + pkCPU + trCPU + fgLabour + fgUtil + fgRent;
+    const outsourcedLabour = fg.outsourced ? 1 : 0;
+    totalCPU = sfTotalCPU + rmCPU + pkCPU + trCPU + fgLabour + outsourcedLabour + fgUtil + fgRent;
 
     // Raw Materials card
     const fgRmBomItems = fgBomAll.filter(b => b.category === 'raw_material');
@@ -4321,7 +4323,10 @@ function costingOpenProduct(type, code) {
       bottomCards += miniCard('<i class="ti ti-stack-2" style="margin-right:4px"></i>Semi FG Components', sfRows, sfTotalCPU);
     }
     if (!fg.noSharedCosts) {
-      bottomCards += miniCard('<i class="ti ti-users" style="margin-right:4px"></i>Labour', tRow('Shared labour', labourRate, `RM ${labour.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} total units`), labourRate);
+      const outsourcedLabourRate = fg.outsourced ? 1 : 0;
+      const labourRows = tRow('Shared labour', labourRate, `RM ${labour.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} total units`)
+        + (fg.outsourced ? tRow('Outsourced labour', outsourcedLabourRate, 'Fixed RM 1.00/unit') : '');
+      bottomCards += miniCard('<i class="ti ti-users" style="margin-right:4px"></i>Labour', labourRows, labourRate + outsourcedLabourRate);
       bottomCards += miniCard('<i class="ti ti-bolt" style="margin-right:4px"></i>Utilities', tRow('Electric + Water (80%)', utilRate, `RM ${utilAlloc.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} units`), utilRate);
       bottomCards += miniCard('<i class="ti ti-building" style="margin-right:4px"></i>Rental', tRow('Rental (75%)', rentRate, `RM ${rentAlloc.toFixed(2)} ÷ ${totalFGOut.toLocaleString()} units`), rentRate);
     }
