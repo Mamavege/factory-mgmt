@@ -655,6 +655,7 @@
             <table style="width:100%;min-width:560px">
               <thead><tr style="background:var(--bg)">
                 <th style="padding:8px 12px;font-size:11px;text-align:left">FG Item</th>
+                <th style="padding:8px 12px;font-size:11px;text-align:left">HS Code</th>
                 <th style="padding:8px 12px;font-size:11px;text-align:right">Carton m³</th>
                 <th style="padding:8px 12px;font-size:11px;text-align:right">Cartons</th>
                 <th style="padding:8px 12px;font-size:11px;text-align:right">Total m³</th>
@@ -1249,7 +1250,7 @@
     <div class="form-row" id="wip-row-input">
       <div class="form-group">
         <label>Raw Material Input (kg)</label>
-        <input type="number" id="wip-input" placeholder="0" min="0" step="0.01" oninput="calcWipYield()">
+        <input type="number" id="wip-input" placeholder="0" min="0" step="0.01" oninput="wipAutoOutput()">
       </div>
       <div class="form-group">
         <label>Yield Rate (auto)</label>
@@ -1289,11 +1290,11 @@
     <div class="form-row">
       <div class="form-group" id="wip-wastage-group">
         <label>Wastage (kg)</label>
-        <input type="number" id="wip-wastage" placeholder="0" min="0" step="0.01">
+        <input type="number" id="wip-wastage" placeholder="0" min="0" step="0.01" oninput="wipAutoOutput()">
       </div>
       <div class="form-group">
         <label id="wip-reject-label">Reject (kg)</label>
-        <input type="number" id="wip-reject" placeholder="0" min="0" step="0.01">
+        <input type="number" id="wip-reject" placeholder="0" min="0" step="0.01" oninput="wipAutoOutput()">
       </div>
     </div>
     <div class="form-group">
@@ -2539,7 +2540,10 @@ function openWipModal(station, data=null) {
 
   // Output / Reject unit label per station (filling = pack)
   const unit = WIP_UNITS[station] || 'kg';
-  document.getElementById('wip-output-label').textContent = `Output (${unit})`;
+  // Preparing: output is auto (input − wastage − reject), so lock the field
+  const outEl = document.getElementById('wip-output');
+  if (station === 'preparing') { outEl.readOnly = true; outEl.style.opacity = '0.7'; document.getElementById('wip-output-label').textContent = `Output (${unit}, auto)`; }
+  else { outEl.readOnly = false; outEl.style.opacity = ''; document.getElementById('wip-output-label').textContent = `Output (${unit})`; }
   document.getElementById('wip-reject-label').textContent = 'Reject (kg)';
 
   document.getElementById('wip-input').value = data?.input_kg??'';
@@ -2550,7 +2554,7 @@ function openWipModal(station, data=null) {
   document.getElementById('wip-wastage').value = data?.wastage_kg??'';
   document.getElementById('wip-reject').value = data?.reject_qty??'';
   document.getElementById('wip-notes').value = data?.notes||'';
-  calcWipYield();
+  wipAutoOutput();
   openModal('modal-wip');
 }
 function wipDurationMin() {
@@ -2568,6 +2572,17 @@ function fmtHM(mins) {
   if (!mins) return '—';
   const h = Math.floor(mins/60), m = mins%60;
   return (h?h+'h ':'') + (m?m+'m':(h?'':'—'));
+}
+function wipAutoOutput() {
+  // Preparing: output = input − wastage − reject (auto)
+  if (document.getElementById('wip-station').value === 'preparing') {
+    const inp = parseFloat(document.getElementById('wip-input').value)||0;
+    const wa  = parseFloat(document.getElementById('wip-wastage').value)||0;
+    const rj  = parseFloat(document.getElementById('wip-reject').value)||0;
+    const out = Math.round((inp - wa - rj) * 100) / 100;
+    document.getElementById('wip-output').value = out > 0 ? out : 0;
+  }
+  calcWipYield();
 }
 function calcWipYield() {
   const inp = parseFloat(document.getElementById('wip-input').value)||0;
@@ -2672,6 +2687,7 @@ function addShipLine() {
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td style="padding:6px 12px"><select onchange="recalcShip()" class="ship-item" style="width:100%">${opts}</select></td>
+    <td style="padding:6px 12px;font-size:12px" class="ship-hs">—</td>
     <td style="padding:6px 12px;text-align:right;font-size:12px" class="ship-m3ctn">—</td>
     <td style="padding:6px 12px;text-align:right"><input type="number" class="ship-qty" min="0" step="1" oninput="recalcShip()" style="width:80px;text-align:right"></td>
     <td style="padding:6px 12px;text-align:right;font-weight:700" class="ship-rowm3">0.000</td>
@@ -2699,6 +2715,7 @@ function recalcShip() {
     const gwc = parseFloat(it?.ctn_gross_kg)||0;
     const cpp = parseFloat(it?.ctn_per_pallet)||0;
     const qty = parseFloat(tr.querySelector('.ship-qty').value)||0;
+    tr.querySelector('.ship-hs').textContent = it ? (it.hs_code||'—') : '—';
     tr.querySelector('.ship-m3ctn').textContent = it ? m3c.toFixed(4) : '—';
     const rm = m3c*qty, rw = gwc*qty;
     const plt = cpp>0 ? Math.ceil(qty/cpp) : 0;
@@ -2742,8 +2759,8 @@ function exportShipment() {
   });
   if (rows.length===1) return toast('Add items with quantities first','error');
   rows.push(['TOTAL','','',totC,totWt.toFixed(1),totM3.toFixed(3)]);
-  const csv = rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
+  const csv = 'sep=,\n' + rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8;'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'shipment.csv';
