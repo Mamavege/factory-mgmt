@@ -634,6 +634,7 @@
             <button class="btn btn-secondary btn-sm" style="width:auto" onclick="wipDatePreset('today')">Today</button>
             <button class="btn btn-secondary btn-sm" style="width:auto" onclick="wipDatePreset('month')">This Month</button>
             <button class="btn btn-secondary btn-sm" style="width:auto" onclick="wipDatePreset('all')">All</button>
+            <button class="btn btn-primary btn-sm" style="width:auto;margin-left:auto" onclick="openWipProductsModal()"><i class="ti ti-settings"></i> Manage Products</button>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px" id="wip-stations-grid">
@@ -1212,6 +1213,36 @@
 </div>
 
 <!-- WIP Entry Modal -->
+<!-- Manage WIP Products Modal -->
+<div class="modal-overlay" id="modal-wip-products">
+  <div class="modal">
+    <h2>Manage WIP Products</h2>
+    <div class="form-group">
+      <label>Station</label>
+      <select id="wipp-station" onchange="renderWipProductsList()">
+        <option value="preparing">Preparing</option>
+        <option value="cooking">Cooking</option>
+        <option value="filling">Filling</option>
+        <option value="packing">Packing</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Add New Product</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="wipp-new" placeholder="e.g. TM" style="flex:1" onkeydown="if(event.key==='Enter')addWipProduct()">
+        <button class="btn btn-primary" style="width:auto" onclick="addWipProduct()"><i class="ti ti-plus"></i> Add</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Current Products</label>
+      <div id="wipp-list" style="max-height:280px;overflow:auto;border:1.5px solid var(--border);border-radius:8px;padding:6px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-wip-products')">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-wip">
   <div class="modal">
     <h2 id="modal-wip-title">Log WIP Entry</h2>
@@ -2343,18 +2374,65 @@ const WIP_STATIONS = [
   { id:'filling',   label:'Filling',   icon:'ti-bottle',  color:'#43c6a8' },
   { id:'packing',   label:'Packing',   icon:'ti-package', color:'#3b82f6' },
 ];
-const WIP_PRODUCTS = {
+const WIP_PRODUCTS_DEFAULT = {
   preparing: ['CABBAGE','GINGER','SWEET RADISH','TOMATO','LEMONGRASS/SERAI','GALANGAL/LENGKUAS','TURMERIC/KUNYIT','VIETNAMESE CORIANDER/DAUN KESUM','CHILI','KAFFIR LIME LEAVE/DAU LIMAU','POTATO','SWEET CORN','THAI CORIANDER/DAUN KETUMBAR THAILAND'],
   cooking:   ['TSO','GTY','SWEET RADISH','SOY SAUCE','TY','TM','GARNISH (CABBAGE)','LUNCH BOX','CLO','SHCR'],
   filling:   ['TSO','GTY','SWEET RADISH','SOY SAUCE','TY','GARNISH (CABBAGE)','CLO','SHCR','DIY','MALA','BBQ','OAT MILK POWDER'],
   packing:   ['SHTY','SHCR','SMCL','SMTS','POCL','POTS','GTSN','POGT','KPM','CLM','BBQ','MALA','TYSP','TMSP'],
 };
+let WIP_PRODUCTS = JSON.parse(JSON.stringify(WIP_PRODUCTS_DEFAULT));
 // Target WIP/FG that raw material is being prepared for (used by Preparing station for costing)
-const WIP_PREP_TARGETS = [...new Set([...WIP_PRODUCTS.cooking, ...WIP_PRODUCTS.filling])];
+let WIP_PREP_TARGETS = [...new Set([...WIP_PRODUCTS.cooking, ...WIP_PRODUCTS.filling])];
+// Load product lists from DB (seed with defaults on first run)
+async function loadWipProducts() {
+  const { data, error } = await sb.from('wip_products').select('station,name').order('created_at');
+  if (error) return;  // table not created yet → keep defaults
+  if (!data || !data.length) {
+    const rows = [];
+    Object.entries(WIP_PRODUCTS_DEFAULT).forEach(([st,arr]) => arr.forEach(n => rows.push({station:st,name:n})));
+    await sb.from('wip_products').insert(rows);
+    return loadWipProducts();
+  }
+  const map = { preparing:[], cooking:[], filling:[], packing:[] };
+  data.forEach(r => { if(!map[r.station]) map[r.station]=[]; map[r.station].push(r.name); });
+  WIP_PRODUCTS = map;
+  WIP_PREP_TARGETS = [...new Set([...(map.cooking||[]), ...(map.filling||[])])];
+}
+function openWipProductsModal() {
+  if (currentProfile?.role !== 'admin') return toast('Admin only','error');
+  document.getElementById('wipp-station').value = 'preparing';
+  renderWipProductsList();
+  openModal('modal-wip-products');
+}
+function renderWipProductsList() {
+  const st = document.getElementById('wipp-station').value;
+  const list = WIP_PRODUCTS[st] || [];
+  document.getElementById('wipp-list').innerHTML = list.length ? list.map((n,i)=>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 6px;border-bottom:1px solid var(--border);font-size:13px"><span>${n}</span><button class="btn btn-danger btn-sm" onclick="deleteWipProduct('${st}',${i})"><i class="ti ti-trash"></i></button></div>`
+  ).join('') : '<div style="color:var(--text-muted);font-size:12px;padding:6px">No products</div>';
+}
+async function addWipProduct() {
+  const st = document.getElementById('wipp-station').value;
+  const name = document.getElementById('wipp-new').value.trim();
+  if (!name) return;
+  if ((WIP_PRODUCTS[st]||[]).includes(name)) return toast('Already exists','error');
+  const { error } = await sb.from('wip_products').insert({station:st, name});
+  if (error) return toast('Add failed: '+error.message,'error');
+  document.getElementById('wipp-new').value = '';
+  await loadWipProducts(); renderWipProductsList(); toast('Added ✓');
+}
+async function deleteWipProduct(st, i) {
+  const name = (WIP_PRODUCTS[st]||[])[i];
+  if (!name || !confirm('Remove "'+name+'" from '+st+'?')) return;
+  const { error } = await sb.from('wip_products').delete().eq('station',st).eq('name',name);
+  if (error) return toast('Remove failed: '+error.message+' — check RLS on wip_products','error');
+  await loadWipProducts(); renderWipProductsList(); toast('Removed');
+}
 // Output/reject unit per station
 const WIP_UNITS = { preparing:'kg', cooking:'kg', filling:'pack', packing:'CTN' };
 let allWip = [];
 async function loadWip() {
+  await loadWipProducts();
   const { data, error } = await sb.from('wip_entries')
     .select('*')
     .order('created_at',{ascending:false}).limit(200);
