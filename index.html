@@ -582,15 +582,20 @@
       <!-- INVENTORY -->
       <div class="page" id="page-inventory">
         <div class="search-bar">
-          <input class="search-input" id="inv-search" placeholder="Search item code / name…" oninput="filterInventory()">
+          <input class="search-input" id="inv-search" placeholder="Search item code / name / short form…" oninput="filterInventory()">
           <select class="filter-select" id="inv-cat-filter" onchange="filterInventory()">
             <option value="">All Categories</option>
           </select>
+          <div style="position:relative">
+            <button class="btn btn-secondary" style="width:auto" onclick="toggleInvColsPanel(event)"><i class="ti ti-columns"></i> Columns</button>
+            <div id="inv-cols-panel" style="display:none;position:absolute;right:0;top:110%;z-index:50;background:var(--card,#fff);border:1.5px solid var(--border);border-radius:10px;padding:8px 10px;box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:180px"></div>
+          </div>
         </div>
+        <style id="inv-col-style"></style>
         <div class="card">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Item Code</th><th>Name</th><th>Category</th><th>Total (Units)</th><th>Reserved</th><th>Available</th><th>Cartons</th><th>Unit</th><th>Ctn Size</th><th>Min. Stock</th><th>Location</th><th>Reserve Location</th><th>Actions</th></tr></thead>
+              <thead><tr><th class="c-code">Item Code</th><th class="c-short">Short</th><th class="c-name">Name</th><th class="c-category">Category</th><th class="c-total">Total (Units)</th><th class="c-reserved">Reserved</th><th class="c-available">Available</th><th class="c-cartons">Cartons</th><th class="c-unit">Unit</th><th class="c-ctnsize">Ctn Size</th><th class="c-minstock">Min. Stock</th><th class="c-location">Location</th><th class="c-reserveloc">Reserve Location</th><th class="c-actions">Actions</th></tr></thead>
               <tbody id="inv-tbody"></tbody>
             </table>
           </div>
@@ -1098,6 +1103,10 @@
       <div class="form-group">
         <label>Item Code</label>
         <input type="text" id="inv-code" placeholder="MAT-001">
+      </div>
+      <div class="form-group">
+        <label>Short Form <span style="font-size:11px;color:var(--text-muted)">(internal)</span></label>
+        <input type="text" id="inv-short" placeholder="e.g. SHTY">
       </div>
       <div class="form-group">
         <label>Item Name</label>
@@ -1884,7 +1893,7 @@ async function loadInventory() {
 function filterInventory() {
   const q = document.getElementById('inv-search').value.toLowerCase();
   const c = document.getElementById('inv-cat-filter').value;
-  renderInventory(allInventory.filter(i=>(!q||i.item_code?.toLowerCase().includes(q)||i.item_name?.toLowerCase().includes(q))&&(!c||i.category===c)));
+  renderInventory(allInventory.filter(i=>(!q||i.item_code?.toLowerCase().includes(q)||i.item_name?.toLowerCase().includes(q)||i.short_code?.toLowerCase().includes(q))&&(!c||i.category===c)));
 }
 function renderInventory(data) {
   const isAdmin = currentProfile?.role==='admin';
@@ -1893,24 +1902,53 @@ function renderInventory(data) {
     const available = i.quantity - reserved;
     const cartons = i.carton_size ? Math.floor(i.quantity/i.carton_size) : '—';
     return `<tr>
-    <td><strong>${i.item_code}</strong></td><td>${i.item_name}</td><td>${i.category||'—'}</td>
-    <td><span class="${i.quantity<=i.min_stock?'badge badge-danger':'badge badge-success'}">${i.quantity}</span></td>
-    <td>${reserved>0?`<span class="badge badge-warning">${reserved}</span>`:'—'}</td>
-    <td><span class="${available<=0?'badge badge-danger':'badge badge-success'}">${available}</span></td>
-    <td>${cartons}</td>
-    <td>${i.unit}</td><td>${i.carton_size||'—'}</td><td>${i.min_stock}</td><td>${i.location||'—'}</td>
-    <td>${i.reserved_location||'—'}</td>
-    <td>
+    <td class="c-code"><strong>${i.item_code}</strong></td><td class="c-short">${i.short_code||'—'}</td><td class="c-name">${i.item_name}</td><td class="c-category">${i.category||'—'}</td>
+    <td class="c-total"><span class="${i.quantity<=i.min_stock?'badge badge-danger':'badge badge-success'}">${i.quantity}</span></td>
+    <td class="c-reserved">${reserved>0?`<span class="badge badge-warning">${reserved}</span>`:'—'}</td>
+    <td class="c-available"><span class="${available<=0?'badge badge-danger':'badge badge-success'}">${available}</span></td>
+    <td class="c-cartons">${cartons}</td>
+    <td class="c-unit">${i.unit}</td><td class="c-ctnsize">${i.carton_size||'—'}</td><td class="c-minstock">${i.min_stock}</td><td class="c-location">${i.location||'—'}</td>
+    <td class="c-reserveloc">${i.reserved_location||'—'}</td>
+    <td class="c-actions">
       ${isAdmin?`<button class="btn btn-secondary btn-sm" onclick="editInv('${i.id}')"><i class="ti ti-edit"></i></button>
       <button class="btn btn-sm" style="background:var(--warning);color:#fff" onclick="openReserveModal('${i.id}')"><i class="ti ti-lock"></i></button>
       <button class="btn btn-danger btn-sm" onclick="deleteInv('${i.id}')"><i class="ti ti-trash"></i></button>`:'—'}
     </td>
-  </tr>`;}).join('') : '<tr><td colspan="13"><div class="empty-state"><i class="ti ti-box"></i><p>No inventory items</p></div></td></tr>';
+  </tr>`;}).join('') : '<tr><td colspan="14"><div class="empty-state"><i class="ti ti-box"></i><p>No inventory items</p></div></td></tr>';
+  applyInvCols();
+}
+const INV_COLS = [
+  {k:'code',label:'Item Code'},{k:'short',label:'Short Form'},{k:'name',label:'Name'},{k:'category',label:'Category'},
+  {k:'total',label:'Total (Units)'},{k:'reserved',label:'Reserved'},{k:'available',label:'Available'},{k:'cartons',label:'Cartons'},
+  {k:'unit',label:'Unit'},{k:'ctnsize',label:'Ctn Size'},{k:'minstock',label:'Min. Stock'},{k:'location',label:'Location'},
+  {k:'reserveloc',label:'Reserve Location'},{k:'actions',label:'Actions'}
+];
+function invHidden() { try { return new Set(JSON.parse(localStorage.getItem('invHiddenCols')||'[]')); } catch(e){ return new Set(); } }
+function applyInvCols() {
+  const hidden = invHidden();
+  document.getElementById('inv-col-style').textContent = [...hidden].map(k=>`.c-${k}{display:none}`).join('');
+}
+function toggleInvColsPanel(e) {
+  e.stopPropagation();
+  const p = document.getElementById('inv-cols-panel');
+  if (p.style.display==='block') { p.style.display='none'; return; }
+  const hidden = invHidden();
+  p.innerHTML = INV_COLS.map(c=>`<label style="display:flex;align-items:center;gap:8px;padding:4px 2px;font-size:13px;cursor:pointer"><input type="checkbox" ${hidden.has(c.k)?'':'checked'} onchange="setInvCol('${c.k}',this.checked)"> ${c.label}</label>`).join('');
+  p.style.display='block';
+  setTimeout(()=>document.addEventListener('click',closeInvColsPanel),0);
+}
+function closeInvColsPanel(e){ const p=document.getElementById('inv-cols-panel'); if(p&&!p.contains(e.target)){ p.style.display='none'; document.removeEventListener('click',closeInvColsPanel); } }
+function setInvCol(k, show) {
+  const hidden = invHidden();
+  if (show) hidden.delete(k); else hidden.add(k);
+  localStorage.setItem('invHiddenCols', JSON.stringify([...hidden]));
+  applyInvCols();
 }
 function openInvModal(data=null) {
   document.getElementById('modal-inv-title').textContent = data?'Edit Item':'New Item';
   document.getElementById('inv-id').value = data?.id||'';
   document.getElementById('inv-code').value = data?.item_code||'';
+  document.getElementById('inv-short').value = data?.short_code||'';
   document.getElementById('inv-name').value = data?.item_name||'';
   document.getElementById('inv-category').value = data?.category||'';
   document.getElementById('inv-unit').value = data?.unit||'pcs';
@@ -1923,7 +1961,7 @@ function openInvModal(data=null) {
 async function editInv(id) { openInvModal(allInventory.find(x=>x.id===id)); }
 async function saveInventory() {
   const id = document.getElementById('inv-id').value;
-  const payload = { item_code:document.getElementById('inv-code').value, item_name:document.getElementById('inv-name').value, category:document.getElementById('inv-category').value, unit:document.getElementById('inv-unit').value, quantity:parseInt(document.getElementById('inv-qty').value)||0, carton_size:parseInt(document.getElementById('inv-carton-size').value)||null, min_stock:parseInt(document.getElementById('inv-min').value)||0, location:document.getElementById('inv-location').value, updated_at:new Date().toISOString() };
+  const payload = { item_code:document.getElementById('inv-code').value, short_code:document.getElementById('inv-short').value||null, item_name:document.getElementById('inv-name').value, category:document.getElementById('inv-category').value, unit:document.getElementById('inv-unit').value, quantity:parseInt(document.getElementById('inv-qty').value)||0, carton_size:parseInt(document.getElementById('inv-carton-size').value)||null, min_stock:parseInt(document.getElementById('inv-min').value)||0, location:document.getElementById('inv-location').value, updated_at:new Date().toISOString() };
   const { error } = id ? await sb.from('inventory').update(payload).eq('id',id) : await sb.from('inventory').insert(payload);
   if (error) return toast('Save failed: '+error.message,'error');
   closeModal('modal-inv'); toast('Item saved'); loadInventory();
