@@ -525,7 +525,7 @@
         <!-- PRODUCTION OUTPUT CHART -->
         <div class="card" style="margin-top:16px">
           <div class="card-header">
-            <div class="card-title"><i class="ti ti-chart-bar" style="margin-right:8px;color:var(--accent)"></i>Production Output by Item</div>
+            <div class="card-title"><i class="ti ti-chart-bar" style="margin-right:8px;color:var(--accent)"></i>Packing Output by Product</div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <select id="chart-period" onchange="onChartPeriodChange()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px">
                 <option value="7">Last 7 days</option>
@@ -1690,40 +1690,40 @@ function onChartPeriodChange() {
 }
 async function renderProductionChart() {
   const period = document.getElementById('chart-period')?.value || '30';
-  let query = sb.from('stock_transactions')
-    .select('quantity, item_id, item:inventory!item_id(item_name,item_code)')
-    .eq('type','in').eq('source','production')
-    .is('deleted_at',null);
+  // Pull from Packing WIP output (more accurate than stock-in, which can include returns)
+  let query = sb.from('wip_entries')
+    .select('output_kg, product_name, work_date')
+    .eq('workstation','packing');
   if (period === 'custom') {
     const from = document.getElementById('chart-date-from')?.value;
     const to = document.getElementById('chart-date-to')?.value;
-    if (from) query = query.gte('created_at', from);
-    if (to) query = query.lte('created_at', to + 'T23:59:59');
+    if (from) query = query.gte('work_date', from);
+    if (to) query = query.lte('work_date', to);
   } else {
-    const since = new Date(Date.now() - parseInt(period)*86400000).toISOString();
-    query = query.gte('created_at', since);
+    const since = new Date(Date.now() - parseInt(period)*86400000).toISOString().slice(0,10);
+    query = query.gte('work_date', since);
   }
   const { data: fresh, error: chartErr } = await query;
   if (chartErr) { console.error('Chart query error:', chartErr); }
   const data = fresh || [];
   const totals = {};
   data.forEach(x => {
-    const key = x.item?.item_name || x.item_id || 'Unknown';
-    totals[key] = (totals[key]||0) + (x.quantity||0);
+    const key = x.product_name || 'Unknown';
+    totals[key] = (totals[key]||0) + (parseFloat(x.output_kg)||0);
   });
   const entries = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
   const grandTotal = entries.reduce((s,[,q])=>s+q, 0);
   const container = document.getElementById('production-chart');
   if (!container) return;
   if (!entries.length) {
-    container.innerHTML = '<div class="empty-state" style="padding:28px"><i class="ti ti-chart-bar"></i><p>No production output recorded yet.<br>Tag stock-ins as "Production Output" to see data here.</p></div>';
+    container.innerHTML = '<div class="empty-state" style="padding:28px"><i class="ti ti-chart-bar"></i><p>No packing output recorded yet.<br>Log output in the WIP Packing station to see data here.</p></div>';
     return;
   }
   const max = entries[0][1] || 1;
   const colors = ['#6c63ff','#ff6584','#43c6a8','#f59e0b','#3b82f6','#ef4444','#10b981','#8b5cf6','#f97316','#06b6d4'];
   container.innerHTML = `
     <div style="text-align:right;margin-bottom:12px;font-size:13px;color:var(--text-muted)">
-      Total Output: <strong style="color:var(--accent);font-size:15px">${grandTotal.toLocaleString()} units</strong>
+      Total Packing Output: <strong style="color:var(--accent);font-size:15px">${grandTotal.toLocaleString()} CTN</strong>
     </div>
     <div style="overflow-x:auto"><div style="min-width:${Math.max(entries.length*100,400)}px">
     <div style="display:flex;align-items:flex-end;gap:12px;height:220px;padding-bottom:8px;border-bottom:2px solid var(--border)">
