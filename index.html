@@ -491,11 +491,7 @@
             <div class="stat-sub">Unresolved tickets</div>
           </div>
         </div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;">
-          <div class="card">
-            <div class="card-header"><div class="card-title">Recent Work Orders</div></div>
-            <div id="dash-orders"><div class="loading" style="padding:16px">Loading…</div></div>
-          </div>
+        <div style="margin-bottom:24px;">
           <div class="card">
             <div class="card-header"><div class="card-title">Low Stock Alerts</div></div>
             <div id="dash-lowstock"><div class="loading" style="padding:16px">Loading…</div></div>
@@ -1675,14 +1671,6 @@ async function loadDashboard() {
   document.getElementById('stat-orders').textContent = wo.count ?? 0;
   document.getElementById('stat-inventory').textContent = inv.data?.length ?? 0;
   document.getElementById('stat-equipment').textContent = mt.count ?? 0;
-
-  const { data: orders } = await sb.from('work_orders').select('*').order('created_at',{ascending:false}).limit(5);
-  document.getElementById('dash-orders').innerHTML = orders?.length
-    ? `<table style="width:100%"><tbody>${orders.map(o=>`<tr>
-        <td style="padding:12px 18px"><strong>${o.order_no}</strong><br><small style="color:var(--text-muted)">${o.product_name}</small></td>
-        <td style="padding:12px 18px">${statusBadge(o.status,'wo')}</td>
-      </tr>`).join('')}</tbody></table>`
-    : '<div class="empty-state"><i class="ti ti-clipboard-list"></i><p>No work orders yet</p></div>';
 
   const low = inv.data?.filter(i => i.quantity <= i.min_stock) || [];
   document.getElementById('dash-lowstock').innerHTML = low.length
