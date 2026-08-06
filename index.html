@@ -2171,7 +2171,21 @@ async function deleteTx(id) {
   }
   toast('Transaction deleted — inventory quantity reversed'); loadTransactions(); renderProductionChart();
 }
+let txSaving = false;
 async function saveTransaction() {
+  if (txSaving) return;                     // guard against double-submit
+  txSaving = true;
+  const saveBtn = document.getElementById('btn-tx-save');
+  const btnLabel = saveBtn ? saveBtn.textContent : '';
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+  try {
+    await _saveTransactionInner();
+  } finally {
+    txSaving = false;
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = btnLabel; }
+  }
+}
+async function _saveTransactionInner() {
   const txId = document.getElementById('tx-id').value;
   const type = document.getElementById('tx-type').value;
   const source = type==='in' ? document.getElementById('tx-source').value : null;
