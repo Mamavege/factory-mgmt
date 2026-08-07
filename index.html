@@ -2524,7 +2524,7 @@ function renderWipStations() {
           ${th('Pax')}
           <th style="padding:7px 12px;font-size:11px"></th>
         </tr></thead><tbody>
-          ${entries.slice(0,10).map(e=>{
+          ${entries.map(e=>{
             const inK=parseFloat(e.input_kg)||0, outK=parseFloat(e.output_kg)||0;
             const yld = inK>0 ? (outK/inK*100).toFixed(1)+'%' : '—';
             return `<tr style="border-bottom:1px solid var(--border)">
