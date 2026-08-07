@@ -2467,7 +2467,7 @@ function renderWipStations() {
   const to   = document.getElementById('wip-to')?.value || '';
   const inRange = e => (!from || (e.work_date||'') >= from) && (!to || (e.work_date||'') <= to);
   grid.innerHTML = WIP_STATIONS.map(st => {
-    const entries = allWip.filter(e=>e.workstation===st.id && inRange(e));
+    const entries = allWip.filter(e=>e.workstation===st.id && inRange(e)).sort((a,b)=>(b.work_date||'').localeCompare(a.work_date||'') || (b.created_at||'').localeCompare(a.created_at||''));
     const showYield = st.id === 'preparing';         // only preparing tracks kg input/yield/wastage
     const hasBatch  = st.id === 'cooking' || st.id === 'filling' || st.id === 'packing';
     const unit = WIP_UNITS[st.id] || 'kg';
