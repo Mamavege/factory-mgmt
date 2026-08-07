@@ -1722,15 +1722,11 @@ async function renderProductionChart() {
   const { data: fresh, error: chartErr } = await query;
   if (chartErr) { console.error('Chart query error:', chartErr); }
   const data = fresh || [];
-  // Convert cartons → units using each product's carton size (matched by short_code)
-  const { data: invRows } = await sb.from('inventory').select('short_code,carton_size');
-  const ctnSize = {};
-  (invRows||[]).forEach(i => { if (i.short_code) ctnSize[i.short_code.trim().toUpperCase()] = parseFloat(i.carton_size)||0; });
+  // Packing output is stored in units
   const totals = {};
   data.forEach(x => {
     const key = x.product_name || 'Unknown';
-    const size = ctnSize[(key||'').trim().toUpperCase()] || 1;   // units per carton (1 if unknown)
-    totals[key] = (totals[key]||0) + (parseFloat(x.output_kg)||0) * size;
+    totals[key] = (totals[key]||0) + (parseFloat(x.output_kg)||0);
   });
   const entries = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
   const grandTotal = entries.reduce((s,[,q])=>s+q, 0);
@@ -2444,7 +2440,7 @@ async function deleteWipProduct(st, i) {
   await loadWipProducts(); renderWipProductsList(); toast('Removed');
 }
 // Output/reject unit per station
-const WIP_UNITS = { preparing:'kg', cooking:'kg', filling:'pack', packing:'CTN' };
+const WIP_UNITS = { preparing:'kg', cooking:'kg', filling:'pack', packing:'unit' };
 let allWip = [];
 async function loadWip() {
   await loadWipProducts();
