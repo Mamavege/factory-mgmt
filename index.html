@@ -1747,9 +1747,9 @@ async function renderProductionChart() {
       ${entries.map(([name,qty],i)=>{
         const pct = Math.max((qty/max)*100, 4);
         const color = colors[i%colors.length];
-        return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:80px">
+        return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;min-width:80px;height:100%">
           <div style="font-size:12px;font-weight:800;color:${color};margin-bottom:4px">${qty.toLocaleString()}</div>
-          <div style="width:100%;max-width:64px;height:${pct}%;background:${color};border-radius:6px 6px 0 0" title="${name}: ${qty}"></div>
+          <div style="width:100%;max-width:64px;height:${pct}%;min-height:3px;background:${color};border-radius:6px 6px 0 0" title="${name}: ${qty}"></div>
         </div>`;
       }).join('')}
     </div>
