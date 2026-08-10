@@ -438,6 +438,12 @@
         <div class="nav-item" onclick="goTo('transactions')">
           <i class="ti ti-arrows-exchange"></i> Stock In / Out
         </div>
+        <div class="nav-item" onclick="goTo('rawmat')">
+          <i class="ti ti-leaf"></i> Raw Materials
+        </div>
+        <div class="nav-item" onclick="goTo('purchasing')">
+          <i class="ti ti-shopping-cart"></i> Purchasing
+        </div>
         <div class="nav-item" onclick="goTo('shipment')">
           <i class="ti ti-ship"></i> Shipment m³
         </div>
@@ -729,6 +735,37 @@
             </table>
           </div>
         </div>
+      </div>
+
+      <!-- RAW MATERIALS -->
+      <div class="page" id="page-rawmat">
+        <div class="search-bar">
+          <input class="search-input" id="rm-search" placeholder="Search code / name…" oninput="filterRawMat()">
+          <select class="filter-select" id="rm-cat-filter" onchange="filterRawMat()"><option value="">All Categories</option></select>
+        </div>
+        <div class="card"><div class="table-wrap">
+          <table>
+            <thead><tr><th>Code</th><th>Name</th><th>Category</th><th>Qty</th><th>Unit</th><th>Min Stock</th><th>Location</th><th>Actions</th></tr></thead>
+            <tbody id="rm-tbody"></tbody>
+          </table>
+        </div></div>
+      </div>
+
+      <!-- PURCHASING -->
+      <div class="page" id="page-purchasing">
+        <div class="search-bar">
+          <input class="search-input" id="po-search" placeholder="Search PO no. / supplier…" oninput="filterPOs()">
+          <select class="filter-select" id="po-status-filter" onchange="filterPOs()">
+            <option value="">All Statuses</option><option value="pending">Pending</option>
+            <option value="partial">Partially Received</option><option value="received">Received</option><option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+        <div class="card"><div class="table-wrap">
+          <table>
+            <thead><tr><th>PO No.</th><th>Supplier</th><th>Order Date</th><th>Items</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+            <tbody id="po-tbody"></tbody>
+          </table>
+        </div></div>
       </div>
 
       <!-- EQUIPMENT -->
@@ -1155,6 +1192,110 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-inv')">Cancel</button>
       <button class="btn btn-primary" style="width:auto" onclick="saveInventory()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Raw Material Modal -->
+<div class="modal-overlay" id="modal-rm">
+  <div class="modal">
+    <h2 id="modal-rm-title">New Raw Material</h2>
+    <input type="hidden" id="rm-id">
+    <div class="form-row">
+      <div class="form-group"><label>Code</label><input type="text" id="rm-code" placeholder="RM-001"></div>
+      <div class="form-group"><label>Name</label><input type="text" id="rm-name" placeholder="Material name"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Category</label><input type="text" id="rm-category" placeholder="e.g. Vegetable, Packaging"></div>
+      <div class="form-group"><label>Unit</label><input type="text" id="rm-unit" placeholder="kg / pcs / roll"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Opening Qty</label><input type="number" id="rm-qty" step="0.01" placeholder="0"></div>
+      <div class="form-group"><label>Min Stock</label><input type="number" id="rm-min" step="0.01" placeholder="0"></div>
+    </div>
+    <div class="form-group"><label>Location</label><input type="text" id="rm-location" placeholder="Store location"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-rm')">Cancel</button>
+      <button class="btn btn-primary" style="width:auto" onclick="saveRM()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Raw Material Stock In/Out Modal -->
+<div class="modal-overlay" id="modal-rm-stock">
+  <div class="modal">
+    <h2>Raw Material Stock In / Out</h2>
+    <div class="form-row">
+      <div class="form-group"><label>Type</label><select id="rms-type"><option value="in">Stock In</option><option value="out">Stock Out (Issue)</option></select></div>
+      <div class="form-group"><label>Material</label><select id="rms-item"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Quantity</label><input type="number" id="rms-qty" step="0.01" min="0" placeholder="0"></div>
+      <div class="form-group"><label>Reference</label><input type="text" id="rms-ref" placeholder="PO / batch / note"></div>
+    </div>
+    <div class="form-group"><label>Reason / Notes</label><input type="text" id="rms-reason" placeholder="e.g. issued to Preparing"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-rm-stock')">Cancel</button>
+      <button class="btn btn-primary" style="width:auto" onclick="saveRMStock()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Suppliers Modal -->
+<div class="modal-overlay" id="modal-suppliers">
+  <div class="modal">
+    <h2>Suppliers</h2>
+    <div class="form-group">
+      <label>Add Supplier</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="sup-new" placeholder="Supplier name" style="flex:1" onkeydown="if(event.key==='Enter')addSupplier()">
+        <button class="btn btn-primary" style="width:auto" onclick="addSupplier()"><i class="ti ti-plus"></i> Add</button>
+      </div>
+    </div>
+    <div class="form-group"><label>Current Suppliers</label>
+      <div id="sup-list" style="max-height:280px;overflow:auto;border:1.5px solid var(--border);border-radius:8px;padding:6px"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modal-suppliers')">Close</button></div>
+  </div>
+</div>
+
+<!-- Purchase Order Modal -->
+<div class="modal-overlay" id="modal-po">
+  <div class="modal" style="max-width:640px">
+    <h2 id="modal-po-title">New Purchase Order</h2>
+    <input type="hidden" id="po-id">
+    <div class="form-row">
+      <div class="form-group"><label>PO No.</label><input type="text" id="po-no" placeholder="PO-2026-001"></div>
+      <div class="form-group"><label>Supplier</label><select id="po-supplier"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Order Date</label><input type="date" id="po-date"></div>
+      <div class="form-group"><label>Notes</label><input type="text" id="po-notes" placeholder="Optional"></div>
+    </div>
+    <div class="form-group">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label style="margin:0">Items</label>
+        <button class="btn btn-secondary btn-sm" style="width:auto" onclick="addPOLine()"><i class="ti ti-plus"></i> Add Item</button>
+      </div>
+      <div id="po-lines"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-po')">Cancel</button>
+      <button class="btn btn-primary" style="width:auto" onclick="savePO()">Save PO</button>
+    </div>
+  </div>
+</div>
+
+<!-- PO Receive (GRN) Modal -->
+<div class="modal-overlay" id="modal-grn">
+  <div class="modal" style="max-width:600px">
+    <h2 id="modal-grn-title">Receive Goods (GRN)</h2>
+    <input type="hidden" id="grn-po-id">
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Enter the quantity received now for each item. It adds to Raw Material stock.</p>
+    <div id="grn-lines"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-grn')">Cancel</button>
+      <button class="btn btn-primary" style="width:auto" onclick="saveGRN()">Confirm Receive</button>
     </div>
   </div>
 </div>
@@ -1623,7 +1764,7 @@ async function loadProfile() {
 const pageTitles = {
   dashboard: 'Dashboard', workorders: 'Work Orders', inventory: 'Inventory',
   transactions: 'Stock In / Out', wip: 'WIP Monitoring', shipment: 'Shipment m³', ai: 'AI Assistant',
-  costing: 'Costing'
+  costing: 'Costing', rawmat: 'Raw Materials', purchasing: 'Purchasing'
 };
 const pageActions = {
   workorders: () => currentProfile?.role==='admin' ? `<button class="btn btn-primary" style="width:auto" onclick="openWOModal()"><i class="ti ti-plus"></i> New Order</button>` : '',
@@ -1631,6 +1772,8 @@ const pageActions = {
   transactions: () => `<button class="btn btn-primary" style="width:auto" onclick="openTxModal()"><i class="ti ti-plus"></i> New Transaction</button>`,
   wip: () => '',
   costing: () => `<button class="btn btn-primary" style="width:auto" onclick="costingNewMonth()"><i class="ti ti-plus"></i> New Month</button>`,
+  rawmat: () => `<button class="btn btn-secondary" style="width:auto" onclick="openRMStockModal()"><i class="ti ti-arrows-exchange"></i> Stock In/Out</button> <button class="btn btn-primary" style="width:auto" onclick="openRMModal()"><i class="ti ti-plus"></i> New Material</button>`,
+  purchasing: () => `<button class="btn btn-secondary" style="width:auto" onclick="openSuppliersModal()"><i class="ti ti-users"></i> Suppliers</button> <button class="btn btn-primary" style="width:auto" onclick="openPOModal()"><i class="ti ti-plus"></i> New PO</button>`,
 };
 
 function toggleSidebar() { document.body.classList.toggle('sidebar-collapsed'); }
@@ -1648,7 +1791,7 @@ function goTo(page) {
 }
 
 function loadPage(page) {
-  const map = { dashboard:loadDashboard, workorders:loadWorkOrders, inventory:loadInventory, transactions:loadTransactions, wip:loadWip, shipment:loadShipment, costing:costingLoad };
+  const map = { dashboard:loadDashboard, workorders:loadWorkOrders, inventory:loadInventory, transactions:loadTransactions, wip:loadWip, shipment:loadShipment, costing:costingLoad, rawmat:loadRawMat, purchasing:loadPurchasing };
   map[page]?.();
 }
 
@@ -2376,6 +2519,202 @@ async function createWOFromCO(i) {
   toast('Work order created for '+o.invoice);
   loadCustomerOrders();
   loadWorkOrders();
+}
+
+// ─── RAW MATERIALS ───────────────────────────────────
+let allRawMat = [];
+async function loadRawMat() {
+  const { data, error } = await sb.from('raw_materials').select('*').order('name');
+  if (error) { toast('Load failed: '+error.message+' — did you create the raw_materials table?','error'); allRawMat=[]; }
+  else allRawMat = data || [];
+  const cats = [...new Set(allRawMat.map(i=>i.category).filter(Boolean))];
+  document.getElementById('rm-cat-filter').innerHTML = '<option value="">All Categories</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+  renderRawMat(allRawMat);
+}
+function filterRawMat() {
+  const q=document.getElementById('rm-search').value.toLowerCase(), c=document.getElementById('rm-cat-filter').value;
+  renderRawMat(allRawMat.filter(i=>(!q||i.code?.toLowerCase().includes(q)||i.name?.toLowerCase().includes(q))&&(!c||i.category===c)));
+}
+function renderRawMat(data) {
+  const isAdmin=currentProfile?.role==='admin';
+  document.getElementById('rm-tbody').innerHTML = data.length ? data.map(i=>`<tr>
+    <td><strong>${i.code||'—'}</strong></td><td>${i.name||''}</td><td>${i.category||'—'}</td>
+    <td><span class="badge ${(+i.quantity<=+i.min_stock)?'badge-danger':'badge-success'}">${i.quantity??0}</span></td>
+    <td>${i.unit||''}</td><td>${i.min_stock??0}</td><td>${i.location||'—'}</td>
+    <td>${isAdmin?`<button class="btn btn-secondary btn-sm" onclick="editRM('${i.id}')"><i class="ti ti-edit"></i></button> <button class="btn btn-danger btn-sm" onclick="deleteRM('${i.id}')"><i class="ti ti-trash"></i></button>`:'—'}</td>
+  </tr>`).join('') : '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-leaf"></i><p>No raw materials yet</p></div></td></tr>';
+}
+function openRMModal(data=null) {
+  document.getElementById('modal-rm-title').textContent = data?'Edit Raw Material':'New Raw Material';
+  document.getElementById('rm-id').value=data?.id||'';
+  document.getElementById('rm-code').value=data?.code||'';
+  document.getElementById('rm-name').value=data?.name||'';
+  document.getElementById('rm-category').value=data?.category||'';
+  document.getElementById('rm-unit').value=data?.unit||'kg';
+  document.getElementById('rm-qty').value=data?.quantity??0;
+  document.getElementById('rm-min').value=data?.min_stock??0;
+  document.getElementById('rm-location').value=data?.location||'';
+  openModal('modal-rm');
+}
+function editRM(id){ openRMModal(allRawMat.find(x=>x.id===id)); }
+async function saveRM() {
+  const id=document.getElementById('rm-id').value;
+  const payload={ code:document.getElementById('rm-code').value, name:document.getElementById('rm-name').value,
+    category:document.getElementById('rm-category').value, unit:document.getElementById('rm-unit').value,
+    quantity:parseFloat(document.getElementById('rm-qty').value)||0, min_stock:parseFloat(document.getElementById('rm-min').value)||0,
+    location:document.getElementById('rm-location').value, updated_at:new Date().toISOString() };
+  const { error } = id ? await sb.from('raw_materials').update(payload).eq('id',id) : await sb.from('raw_materials').insert(payload);
+  if (error) return toast('Save failed: '+error.message,'error');
+  closeModal('modal-rm'); toast('Material saved'); loadRawMat();
+}
+async function deleteRM(id) {
+  if (!confirm('Delete this material?')) return;
+  const { error } = await sb.from('raw_materials').delete().eq('id',id);
+  if (error) return toast('Delete failed: '+error.message,'error');
+  toast('Deleted'); loadRawMat();
+}
+async function openRMStockModal() {
+  if (!allRawMat.length) await loadRawMat();
+  document.getElementById('rms-item').innerHTML = allRawMat.map(i=>`<option value="${i.id}">${i.code?i.code+' — ':''}${i.name} (${i.unit||''})</option>`).join('');
+  document.getElementById('rms-type').value='in'; document.getElementById('rms-qty').value=''; document.getElementById('rms-ref').value=''; document.getElementById('rms-reason').value='';
+  openModal('modal-rm-stock');
+}
+async function saveRMStock() {
+  const id=document.getElementById('rms-item').value;
+  const type=document.getElementById('rms-type').value;
+  const qty=parseFloat(document.getElementById('rms-qty').value)||0;
+  if (!id||!qty) return toast('Select material and quantity','error');
+  const { data: rm } = await sb.from('raw_materials').select('quantity,name').eq('id',id).single();
+  const newQty = type==='in' ? (+rm.quantity)+qty : (+rm.quantity)-qty;
+  if (newQty<0) return toast('Insufficient stock for '+rm.name,'error');
+  await sb.from('rm_transactions').insert({rm_id:id,type,quantity:qty,reference_no:document.getElementById('rms-ref').value,reason:document.getElementById('rms-reason').value,created_by:currentUser.id});
+  await sb.from('raw_materials').update({quantity:newQty,updated_at:new Date().toISOString()}).eq('id',id);
+  closeModal('modal-rm-stock'); toast('Stock updated'); loadRawMat();
+}
+
+// ─── PURCHASING (Suppliers, PO, GRN) ─────────────────
+let allPOs = [], allSuppliers = [], poLineSeq = 0;
+async function loadSuppliers() {
+  const { data } = await sb.from('suppliers').select('*').order('name');
+  allSuppliers = data || [];
+}
+async function loadPurchasing() {
+  await loadSuppliers();
+  if (!allRawMat.length) await loadRawMat();
+  const { data, error } = await sb.from('purchase_orders').select('*, items:po_items(*)').order('created_at',{ascending:false});
+  if (error) { toast('Load failed: '+error.message+' — did you create the purchasing tables?','error'); allPOs=[]; }
+  else allPOs = data || [];
+  renderPOs(allPOs);
+}
+function filterPOs() {
+  const q=document.getElementById('po-search').value.toLowerCase(), s=document.getElementById('po-status-filter').value;
+  renderPOs(allPOs.filter(p=>(!q||p.po_no?.toLowerCase().includes(q)||p.supplier?.toLowerCase().includes(q))&&(!s||p.status===s)));
+}
+function poStatusBadge(s){ const m={pending:'badge-gray',partial:'badge-warning',received:'badge-success',cancelled:'badge-danger'}; const l={pending:'Pending',partial:'Partial',received:'Received',cancelled:'Cancelled'}; return `<span class="badge ${m[s]||'badge-gray'}">${l[s]||s}</span>`; }
+function renderPOs(data) {
+  const isAdmin=currentProfile?.role==='admin';
+  document.getElementById('po-tbody').innerHTML = data.length ? data.map(p=>{
+    const items=(p.items||[]).length;
+    return `<tr>
+      <td><strong>${p.po_no||'—'}</strong></td><td>${p.supplier||'—'}</td><td>${p.order_date||'—'}</td>
+      <td>${items} item(s)</td><td>${poStatusBadge(p.status)}</td><td>${fmtDate(p.created_at)}</td>
+      <td style="white-space:nowrap">
+        ${p.status!=='received'&&p.status!=='cancelled'?`<button class="btn btn-success btn-sm" onclick="openGRN('${p.id}')" title="Receive"><i class="ti ti-package-import"></i> Receive</button>`:''}
+        ${isAdmin?` <button class="btn btn-secondary btn-sm" onclick="editPO('${p.id}')"><i class="ti ti-edit"></i></button> <button class="btn btn-danger btn-sm" onclick="deletePO('${p.id}')"><i class="ti ti-trash"></i></button>`:''}
+      </td></tr>`;
+  }).join('') : '<tr><td colspan="7"><div class="empty-state"><i class="ti ti-shopping-cart"></i><p>No purchase orders yet</p></div></td></tr>';
+}
+function openSuppliersModal(){ renderSupList(); openModal('modal-suppliers'); }
+async function renderSupList(){
+  await loadSuppliers();
+  document.getElementById('sup-list').innerHTML = allSuppliers.length ? allSuppliers.map(s=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 6px;border-bottom:1px solid var(--border);font-size:13px"><span>${s.name}</span><button class="btn btn-danger btn-sm" onclick="deleteSupplier('${s.id}')"><i class="ti ti-trash"></i></button></div>`).join('') : '<div style="font-size:12px;color:var(--text-muted);padding:6px">No suppliers</div>';
+}
+async function addSupplier(){
+  const name=document.getElementById('sup-new').value.trim(); if(!name) return;
+  const { error }=await sb.from('suppliers').insert({name}); if(error) return toast('Add failed: '+error.message,'error');
+  document.getElementById('sup-new').value=''; renderSupList(); toast('Supplier added');
+}
+async function deleteSupplier(id){ if(!confirm('Remove supplier?'))return; await sb.from('suppliers').delete().eq('id',id); renderSupList(); }
+function poSupplierOptions(sel){ return '<option value="">— Select supplier —</option>'+allSuppliers.map(s=>`<option value="${s.name}"${sel===s.name?' selected':''}>${s.name}</option>`).join(''); }
+function rmOptions(sel){ return '<option value="">— Select material —</option>'+allRawMat.map(m=>`<option value="${m.id}"${sel===m.id?' selected':''}>${m.code?m.code+' — ':''}${m.name}</option>`).join(''); }
+function addPOLine(rmId='',qty='',price=''){
+  const id='pol'+(poLineSeq++);
+  const div=document.createElement('div'); div.className='po-line'; div.id=id;
+  div.style.cssText='display:flex;gap:6px;margin-bottom:6px;align-items:center';
+  div.innerHTML=`<select class="pol-rm" style="flex:1">${rmOptions(rmId)}</select>
+    <input type="number" class="pol-qty" placeholder="Qty" step="0.01" min="0" value="${qty}" style="width:80px">
+    <input type="number" class="pol-price" placeholder="Unit $" step="0.0001" min="0" value="${price}" style="width:90px">
+    <button class="btn btn-danger btn-sm" onclick="this.closest('.po-line').remove()"><i class="ti ti-x"></i></button>`;
+  document.getElementById('po-lines').appendChild(div);
+}
+async function openPOModal(data=null){
+  await loadSuppliers(); if(!allRawMat.length) await loadRawMat();
+  document.getElementById('modal-po-title').textContent = data?'Edit Purchase Order':'New Purchase Order';
+  document.getElementById('po-id').value=data?.id||'';
+  document.getElementById('po-no').value=data?.po_no||'';
+  document.getElementById('po-supplier').innerHTML=poSupplierOptions(data?.supplier);
+  document.getElementById('po-date').value=data?.order_date||new Date().toISOString().slice(0,10);
+  document.getElementById('po-notes').value=data?.notes||'';
+  document.getElementById('po-lines').innerHTML=''; poLineSeq=0;
+  if (data?.items?.length) data.items.forEach(it=>addPOLine(it.rm_id,it.qty_ordered,it.unit_price)); else addPOLine();
+  openModal('modal-po');
+}
+function editPO(id){ openPOModal(allPOs.find(x=>x.id===id)); }
+async function savePO(){
+  const id=document.getElementById('po-id').value;
+  const lines=[];
+  document.querySelectorAll('#po-lines .po-line').forEach(el=>{
+    const rm=el.querySelector('.pol-rm').value; const qty=parseFloat(el.querySelector('.pol-qty').value)||0; const price=parseFloat(el.querySelector('.pol-price').value)||0;
+    if(rm&&qty>0){ const m=allRawMat.find(x=>x.id===rm); lines.push({rm_id:rm, rm_name:m?.name||'', qty_ordered:qty, unit_price:price}); }
+  });
+  if(!document.getElementById('po-no').value) return toast('Enter PO number','error');
+  if(!lines.length) return toast('Add at least one item','error');
+  const payload={ po_no:document.getElementById('po-no').value, supplier:document.getElementById('po-supplier').value,
+    order_date:document.getElementById('po-date').value, notes:document.getElementById('po-notes').value };
+  let poId=id;
+  if(id){ await sb.from('purchase_orders').update(payload).eq('id',id); await sb.from('po_items').delete().eq('po_id',id); }
+  else { payload.status='pending'; payload.created_by=currentUser.id; const { data, error }=await sb.from('purchase_orders').insert(payload).select().single(); if(error) return toast('Save failed: '+error.message,'error'); poId=data.id; }
+  await sb.from('po_items').insert(lines.map(l=>({po_id:poId, rm_id:l.rm_id, rm_name:l.rm_name, qty_ordered:l.qty_ordered, unit_price:l.unit_price, qty_received:0})));
+  closeModal('modal-po'); toast('PO saved'); loadPurchasing();
+}
+async function deletePO(id){ if(!confirm('Delete this PO?'))return; await sb.from('po_items').delete().eq('po_id',id); await sb.from('purchase_orders').delete().eq('id',id); toast('PO deleted'); loadPurchasing(); }
+async function openGRN(id){
+  const po=allPOs.find(x=>x.id===id); if(!po) return;
+  document.getElementById('grn-po-id').value=id;
+  document.getElementById('modal-grn-title').textContent='Receive Goods — '+(po.po_no||'');
+  document.getElementById('grn-lines').innerHTML=(po.items||[]).map((it,i)=>{
+    const outstanding=(+it.qty_ordered)-(+it.qty_received||0);
+    return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;font-size:13px" data-rm="${it.rm_id}">
+      <span style="flex:1">${it.rm_name||''}<br><small style="color:var(--text-muted)">ordered ${it.qty_ordered}, received ${it.qty_received||0}, outstanding ${outstanding}</small></span>
+      <input type="number" class="grn-qty" step="0.01" min="0" value="${outstanding>0?outstanding:0}" data-itemid="${it.id}" style="width:90px" placeholder="recv">
+    </div>`;
+  }).join('');
+  openModal('modal-grn');
+}
+async function saveGRN(){
+  const poId=document.getElementById('grn-po-id').value;
+  const po=allPOs.find(x=>x.id===poId); if(!po) return;
+  let any=false;
+  for (const el of document.querySelectorAll('#grn-lines .grn-qty')) {
+    const recv=parseFloat(el.value)||0; if(recv<=0) continue;
+    const itemId=el.dataset.itemid; const item=(po.items||[]).find(x=>x.id===itemId); if(!item) continue;
+    any=true;
+    // add to raw material stock
+    const { data: rm } = await sb.from('raw_materials').select('quantity,name').eq('id',item.rm_id).single();
+    if (rm) {
+      await sb.from('raw_materials').update({quantity:(+rm.quantity)+recv, updated_at:new Date().toISOString()}).eq('id',item.rm_id);
+      await sb.from('rm_transactions').insert({rm_id:item.rm_id,type:'in',quantity:recv,reference_no:po.po_no,reason:'GRN — '+(po.supplier||''),created_by:currentUser.id});
+    }
+    await sb.from('po_items').update({qty_received:(+item.qty_received||0)+recv}).eq('id',itemId);
+  }
+  if(!any){ toast('Enter received quantity','error'); return; }
+  // recompute PO status
+  const { data: items } = await sb.from('po_items').select('*').eq('po_id',poId);
+  const allDone = items.every(i=>(+i.qty_received)>= (+i.qty_ordered));
+  const anyRecv = items.some(i=>(+i.qty_received)>0);
+  const status = allDone?'received':(anyRecv?'partial':'pending');
+  await sb.from('purchase_orders').update({status}).eq('id',poId);
+  closeModal('modal-grn'); toast('Goods received — RM stock updated'); loadPurchasing();
 }
 
 // ─── WIP MONITORING ─────────────────────────────────
