@@ -1276,7 +1276,7 @@
       <div class="form-group"><label>Request Date</label><input type="date" id="po-reqdate"></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Tracking / B-L No.</label><input type="text" id="po-tracking" placeholder="Sea freight tracking no."></div>
+      <div class="form-group"><label>Tracking / B-L No. <span style="font-size:11px;color:var(--text-muted)">(no. or full URL)</span></label><input type="text" id="po-tracking" placeholder="ZZ-743639 or paste full link"></div>
       <div class="form-group"><label>Notes</label><input type="text" id="po-notes" placeholder="Optional"></div>
     </div>
     <div class="form-group">
@@ -2658,22 +2658,25 @@ function filterPOs() {
 }
 function poStageBadge(s){ const m={requested:'badge-gray',ordered:'badge-info',paid:'badge-purple',china_wh:'badge-info',shipped:'badge-warning',arrived_port:'badge-warning',customs:'badge-warning',delivered_hq:'badge-info',delivered:'badge-info',received:'badge-success',cancelled:'badge-danger'}; return `<span class="badge ${m[s]||'badge-gray'}">${STAGE_LABEL[s]||s}</span>`; }
 function daysBetween(a,b){ if(!a||!b) return null; return Math.round((new Date(b)-new Date(a))/86400000); }
+// Build the tracking URL: paste a full URL → used as-is; type just a number → auto-build the zzwl link
+function poTrackUrl(t){ if(!t) return ''; t=t.trim(); if(/^https?:\/\//i.test(t)) return t; return 'https://zzwl.jywl.net/checkexpress?s=1&order_tracking_search='+encodeURIComponent(t)+'&search-submit=%E8%BF%90%E5%8D%95%E6%9F%A5%E8%AF%A2'; }
 function renderPOs(data) {
   const isAdmin=currentProfile?.role==='admin';
   document.getElementById('po-tbody').innerHTML = data.length ? data.map(p=>{
     // next milestone eta for display
     const nextEta = p.stage==='received' ? (p.delivered_date||'') : (p.eta_hq||p.eta||p.etd||p.delivered_date||'');
     const lead = daysBetween(p.req_date, p.delivered_date);
-    const trackUrl = p.tracking_no ? ('https://zzwl.jywl.net/checkexpress?s=1&order_tracking_search='+encodeURIComponent(p.tracking_no)+'&search-submit=%E8%BF%90%E5%8D%95%E6%9F%A5%E8%AF%A2') : '';
+    const trackUrl = poTrackUrl(p.tracking_no);
+    const trackLabel = p.tracking_no ? (/^https?:\/\//i.test(p.tracking_no.trim()) ? 'Track shipment' : p.tracking_no) : '';
     return `<tr>
-      <td><strong>${p.po_no||'—'}</strong>${p.tracking_no?`<br><a href="${trackUrl}" target="_blank" style="font-size:11px;color:var(--primary,#6d5efc)"><i class="ti ti-ship" style="font-size:11px"></i> ${p.tracking_no}</a>`:''}</td><td>${p.supplier||'—'}</td>
+      <td><strong>${p.po_no||'—'}</strong>${p.tracking_no?`<br><a href="${trackUrl}" target="_blank" style="font-size:11px;color:var(--primary,#6d5efc)"><i class="ti ti-ship" style="font-size:11px"></i> ${trackLabel}</a>`:''}</td><td>${p.supplier||'—'}</td>
       <td>${p.type==='import'?'🚢 Import':'Local'}</td>
       <td>${poStageBadge(p.stage||'requested')}</td>
       <td>${p.req_date||'—'}</td>
       <td>${nextEta||'—'}</td>
       <td>${lead!=null?lead+' days':'—'}</td>
       <td style="white-space:nowrap">
-        ${p.tracking_no?`<a class="btn btn-secondary btn-sm" href="${trackUrl}" target="_blank" title="Track ${p.tracking_no}"><i class="ti ti-ship"></i></a>`:''}
+        ${p.tracking_no?`<a class="btn btn-secondary btn-sm" href="${trackUrl}" target="_blank" title="Track ${trackLabel}"><i class="ti ti-ship"></i></a>`:''}
         <button class="btn btn-secondary btn-sm" onclick="openPOTimeline('${p.id}')" title="Timeline"><i class="ti ti-list-check"></i></button>
         <button class="btn btn-secondary btn-sm" onclick="openTrack('${p.id}')" title="Update progress"><i class="ti ti-timeline-event"></i></button>
         ${p.stage!=='received'?`<button class="btn btn-success btn-sm" onclick="openGRN('${p.id}')" title="Receive"><i class="ti ti-package-import"></i></button>`:''}
