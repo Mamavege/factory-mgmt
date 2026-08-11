@@ -4712,7 +4712,8 @@ let _costingDetailScrollY = 0;
 function costingBackToDetail() {
   document.getElementById('costing-product-view').style.display = 'none';
   document.getElementById('costing-detail-view').style.display = 'block';
-  window.scrollTo(0, _costingDetailScrollY);
+  const main = document.querySelector('.main');
+  if (main) main.scrollTop = _costingDetailScrollY;
 }
 
 function costingOpenProduct(type, code) {
@@ -4722,7 +4723,7 @@ function costingOpenProduct(type, code) {
     : COSTING_FG.find(x => x.code === code);
   if (!product) return;
 
-  _costingDetailScrollY = window.scrollY;
+  _costingDetailScrollY = document.querySelector('.main')?.scrollTop || 0;
   document.getElementById('costing-detail-view').style.display = 'none';
   document.getElementById('costing-product-view').style.display = 'block';
   window.scrollTo(0, 0);
