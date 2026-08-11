@@ -754,7 +754,7 @@
       <!-- PURCHASING -->
       <div class="page" id="page-purchasing">
         <div class="search-bar">
-          <input class="search-input" id="po-search" placeholder="Search PO no. / supplier…" oninput="filterPOs()">
+          <input class="search-input" id="po-search" placeholder="Search PO no. / supplier / item…" oninput="filterPOs()">
           <select class="filter-select" id="po-status-filter" onchange="filterPOs()">
             <option value="">All Statuses</option><option value="pending">Pending</option>
             <option value="partial">Partially Received</option><option value="received">Received</option><option value="cancelled">Cancelled</option>
@@ -762,7 +762,7 @@
         </div>
         <div class="card"><div class="table-wrap">
           <table>
-            <thead><tr><th>PO Ref</th><th>Supplier</th><th>Type</th><th>Stage</th><th>Requested</th><th>Next / ETA</th><th>Lead Time</th><th>Actions</th></tr></thead>
+            <thead><tr><th>PO Ref</th><th>Supplier</th><th>Items</th><th>Type</th><th>Stage</th><th>Requested</th><th>Next / ETA</th><th>Lead Time</th><th>Actions</th></tr></thead>
             <tbody id="po-tbody"></tbody>
           </table>
         </div></div>
@@ -2654,8 +2654,10 @@ async function loadPurchasing() {
 }
 function filterPOs() {
   const q=document.getElementById('po-search').value.toLowerCase(), s=document.getElementById('po-status-filter').value;
-  renderPOs(allPOs.filter(p=>(!q||p.po_no?.toLowerCase().includes(q)||p.supplier?.toLowerCase().includes(q))&&(!s||p.stage===s)));
+  renderPOs(allPOs.filter(p=>(!q||p.po_no?.toLowerCase().includes(q)||p.supplier?.toLowerCase().includes(q)||poItemsText(p).toLowerCase().includes(q))&&(!s||p.stage===s)));
 }
+// Comma-separated item names (+ qty) for an order
+function poItemsText(p){ const its=p.items||[]; return its.map(it=>{ const m=allRawMat.find(x=>x.id===it.rm_id); const nm=it.rm_name||m?.name||it.rm_id||''; const u=m?.unit?(' '+m.unit):''; return nm+(it.qty_ordered?(' ×'+it.qty_ordered+u):''); }).join(', '); }
 function poStageBadge(s){ const m={requested:'badge-gray',ordered:'badge-info',paid:'badge-purple',china_wh:'badge-info',shipped:'badge-warning',arrived_port:'badge-warning',customs:'badge-warning',delivered_hq:'badge-info',delivered:'badge-info',received:'badge-success',cancelled:'badge-danger'}; return `<span class="badge ${m[s]||'badge-gray'}">${STAGE_LABEL[s]||s}</span>`; }
 function daysBetween(a,b){ if(!a||!b) return null; return Math.round((new Date(b)-new Date(a))/86400000); }
 // Build the tracking URL: paste a full URL → used as-is; type just a number → auto-build the zzwl link
@@ -2670,6 +2672,7 @@ function renderPOs(data) {
     const trackLabel = p.tracking_no ? (/^https?:\/\//i.test(p.tracking_no.trim()) ? 'Track shipment' : p.tracking_no) : '';
     return `<tr>
       <td><strong>${p.po_no||'—'}</strong>${p.tracking_no?`<br><a href="${trackUrl}" target="_blank" style="font-size:11px;color:var(--primary,#6d5efc)"><i class="ti ti-ship" style="font-size:11px"></i> ${trackLabel}</a>`:''}</td><td>${p.supplier||'—'}</td>
+      <td style="max-width:240px;font-size:12px;white-space:normal">${poItemsText(p)||'—'}</td>
       <td>${p.type==='import'?'🚢 Import':'Local'}</td>
       <td>${poStageBadge(p.stage||'requested')}</td>
       <td>${p.req_date||'—'}</td>
@@ -2682,7 +2685,7 @@ function renderPOs(data) {
         ${p.stage!=='received'?`<button class="btn btn-success btn-sm" onclick="openGRN('${p.id}')" title="Receive"><i class="ti ti-package-import"></i></button>`:''}
         ${isAdmin?`<button class="btn btn-secondary btn-sm" onclick="editPO('${p.id}')"><i class="ti ti-edit"></i></button> <button class="btn btn-danger btn-sm" onclick="deletePO('${p.id}')"><i class="ti ti-trash"></i></button>`:''}
       </td></tr>`;
-  }).join('') : '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-shopping-cart"></i><p>No orders tracked yet</p></div></td></tr>';
+  }).join('') : '<tr><td colspan="9"><div class="empty-state"><i class="ti ti-shopping-cart"></i><p>No orders tracked yet</p></div></td></tr>';
 }
 // Suppliers
 function openSuppliersModal(){ renderSupList(); openModal('modal-suppliers'); }
