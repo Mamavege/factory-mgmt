@@ -1304,6 +1304,17 @@
   </div>
 </div>
 
+<!-- PO Timeline Modal -->
+<div class="modal-overlay" id="modal-po-timeline">
+  <div class="modal" style="max-width:520px">
+    <h2 id="potl-title">Order Timeline</h2>
+    <div id="potl-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-po-timeline')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Quick Receive (standalone GRN) Modal -->
 <div class="modal-overlay" id="modal-quickrecv">
   <div class="modal">
@@ -2657,6 +2668,7 @@ function renderPOs(data) {
       <td>${lead!=null?lead+' days':'—'}</td>
       <td style="white-space:nowrap">
         ${p.tracking_no?`<a class="btn btn-secondary btn-sm" href="https://zzwl.jywl.net/" target="_blank" title="Sea-freight tracking (${p.tracking_no})"><i class="ti ti-ship"></i></a>`:''}
+        <button class="btn btn-secondary btn-sm" onclick="openPOTimeline('${p.id}')" title="Timeline"><i class="ti ti-list-check"></i></button>
         <button class="btn btn-secondary btn-sm" onclick="openTrack('${p.id}')" title="Update progress"><i class="ti ti-timeline-event"></i></button>
         ${p.stage!=='received'?`<button class="btn btn-success btn-sm" onclick="openGRN('${p.id}')" title="Receive"><i class="ti ti-package-import"></i></button>`:''}
         ${isAdmin?`<button class="btn btn-secondary btn-sm" onclick="editPO('${p.id}')"><i class="ti ti-edit"></i></button> <button class="btn btn-danger btn-sm" onclick="deletePO('${p.id}')"><i class="ti ti-trash"></i></button>`:''}
@@ -2716,6 +2728,35 @@ async function savePO(){
   closeModal('modal-po'); toast('Order saved'); loadPurchasing();
 }
 async function deletePO(id){ if(!confirm('Delete this order?'))return; await sb.from('po_items').delete().eq('po_id',id); await sb.from('purchase_orders').delete().eq('id',id); toast('Deleted'); loadPurchasing(); }
+// Timeline / progress stepper
+const STAGE_DATE_FIELD = { requested:'req_date', ordered:'order_date', paid:'payment_date', china_wh:null, shipped:'etd', arrived_port:'eta', customs:'customs_date', delivered_hq:'eta_hq', delivered:'delivered_date', received:'delivered_date' };
+function openPOTimeline(id){
+  const p=allPOs.find(x=>x.id===id); if(!p) return;
+  document.getElementById('potl-title').textContent='Timeline — '+(p.po_no||'')+(p.supplier?(' · '+p.supplier):'');
+  const stages=PO_STAGES[p.type||'local'];
+  const curIdx=Math.max(0, stages.indexOf(p.stage||'requested'));
+  const rows=stages.map((s,i)=>{
+    const done=i<curIdx, current=i===curIdx;
+    const df=STAGE_DATE_FIELD[s]; const dateVal=df?p[df]:'';
+    const color= done?'var(--success)' : current?'var(--accent)' : 'var(--border)';
+    const txtColor= (done||current)?'var(--text)':'var(--text-muted)';
+    const icon= done?'<i class="ti ti-check" style="font-size:13px;color:#fff"></i>' : (current?'<i class="ti ti-dots" style="font-size:13px;color:#fff"></i>':'');
+    const line= i<stages.length-1 ? `<div style="position:absolute;left:13px;top:26px;width:2px;height:100%;background:${done?'var(--success)':'var(--border)'}"></div>` : '';
+    return `<div style="position:relative;display:flex;gap:12px;padding-bottom:18px">
+      ${line}
+      <div style="width:26px;height:26px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;flex-shrink:0;z-index:1">${icon}</div>
+      <div style="flex:1">
+        <div style="font-weight:${current?'800':'600'};font-size:13px;color:${txtColor}">${STAGE_LABEL[s]}${current?' <span style="font-size:10px;color:var(--accent)">← current</span>':''}</div>
+        <div style="font-size:12px;color:var(--text-muted)">${dateVal?('📅 '+dateVal):(done?'done':(current?'in progress':'pending'))}</div>
+      </div>
+    </div>`;
+  }).join('');
+  const lead=daysBetween(p.req_date,p.delivered_date);
+  document.getElementById('potl-body').innerHTML =
+    `<div style="margin-bottom:12px;font-size:12px;color:var(--text-muted)">${p.type==='import'?'🚢 Import (China)':'Local'}${lead!=null?' · Lead time: <strong style="color:var(--accent)">'+lead+' days</strong>':''}</div>`
+    + rows;
+  openModal('modal-po-timeline');
+}
 // Track progress
 function openTrack(id){
   const p=allPOs.find(x=>x.id===id); if(!p) return;
