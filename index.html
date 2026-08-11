@@ -1306,8 +1306,8 @@
   <div class="modal">
     <h2>Quick Receive (Raw Material)</h2>
     <div class="form-row">
-      <div class="form-group"><label>Material</label><select id="qr-item"></select></div>
-      <div class="form-group"><label>Quantity</label><input type="number" id="qr-qty" step="0.01" min="0" placeholder="0"></div>
+      <div class="form-group"><label>Material</label><select id="qr-item" onchange="qrUpdateUnit()"></select></div>
+      <div class="form-group"><label>Quantity <span id="qr-unit" style="color:var(--accent);font-weight:700"></span></label><input type="number" id="qr-qty" step="0.01" min="0" placeholder="0"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>PO Ref (AutoCount)</label><input type="text" id="qr-ref" placeholder="optional"></div>
@@ -2770,7 +2770,12 @@ async function openQuickReceive(){
   if(!allRawMat.length) await loadRawMat();
   document.getElementById('qr-item').innerHTML=allRawMat.map(m=>`<option value="${m.id}">${m.code?m.code+' — ':''}${m.name} (${m.unit||''})</option>`).join('');
   document.getElementById('qr-qty').value=''; document.getElementById('qr-ref').value=''; document.getElementById('qr-supplier').value='';
+  qrUpdateUnit();
   openModal('modal-quickrecv');
+}
+function qrUpdateUnit(){
+  const m = allRawMat.find(x=>x.id===document.getElementById('qr-item').value);
+  document.getElementById('qr-unit').textContent = m&&m.unit ? '('+m.unit+')' : '';
 }
 async function saveQuickReceive(){
   const id=document.getElementById('qr-item').value; const qty=parseFloat(document.getElementById('qr-qty').value)||0;
