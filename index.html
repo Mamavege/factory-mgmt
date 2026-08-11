@@ -3561,7 +3561,7 @@ function calPrev() { calMonth--; if (calMonth < 0) { calMonth=11; calYear--; } c
 function calNext() { calMonth++; if (calMonth > 11) { calMonth=0; calYear++; } calSelectedDate=null; document.getElementById('cal-detail').style.display='none'; loadCalendar(); }
 
 const PLAN_TYPE_STATION = { Prepare:'preparing', Cook:'cooking', Fill:'filling', Pack:'packing' };
-const PLAN_UNITS = { Prepare:'kg', Cook:'pot', Fill:'pack', Pack:'unit' };
+const PLAN_UNITS = { Prepare:'kg', Cook:'pot', Fill:'pack', Pack:'CTN' };
 let planLineSeq = 0;
 function planProductOptions(type, sel){
   const list = WIP_PRODUCTS[PLAN_TYPE_STATION[type]] || [];
