@@ -3732,8 +3732,21 @@ let costingCurrentMonthId = null;
 let costingAutoSaveTimer = null;
 function costingScheduleAutoSave() {
   clearTimeout(costingAutoSaveTimer);
-  costingAutoSaveTimer = setTimeout(() => costingSave(true), 1200);
+  costingAutoSaveTimer = setTimeout(() => costingSave(true), 600);
 }
+// Save immediately when user switches tab or refreshes
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && costingCurrentMonthId) {
+    clearTimeout(costingAutoSaveTimer);
+    costingSave(true);
+  }
+});
+window.addEventListener('beforeunload', () => {
+  if (costingCurrentMonthId) {
+    clearTimeout(costingAutoSaveTimer);
+    costingSave(true);
+  }
+});
 // Yield rates for materials with significant trim/waste loss
 // BOM qty_per_pot = actual usable qty; purchase qty = usable qty ÷ (yield% / 100)
 const YIELD_RATE_MATERIALS = [
@@ -4695,9 +4708,11 @@ function costingBackToList() {
   costingLoad();
 }
 
+let _costingDetailScrollY = 0;
 function costingBackToDetail() {
   document.getElementById('costing-product-view').style.display = 'none';
   document.getElementById('costing-detail-view').style.display = 'block';
+  window.scrollTo(0, _costingDetailScrollY);
 }
 
 function costingOpenProduct(type, code) {
@@ -4707,8 +4722,10 @@ function costingOpenProduct(type, code) {
     : COSTING_FG.find(x => x.code === code);
   if (!product) return;
 
+  _costingDetailScrollY = window.scrollY;
   document.getElementById('costing-detail-view').style.display = 'none';
   document.getElementById('costing-product-view').style.display = 'block';
+  window.scrollTo(0, 0);
   document.getElementById('cpv-title').textContent = product.name;
   document.getElementById('cpv-badge').innerHTML = isSemi
     ? `<span class="badge badge-purple">${code}</span> <span class="badge badge-gray" style="font-size:10px">Semi FG</span>`
