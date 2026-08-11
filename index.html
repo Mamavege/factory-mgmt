@@ -1272,7 +1272,10 @@
       <div class="form-group"><label>Type</label><select id="po-type" onchange="renderPOStageInfo()"><option value="local">Local</option><option value="import">Import (China)</option></select></div>
       <div class="form-group"><label>Request Date</label><input type="date" id="po-reqdate"></div>
     </div>
-    <div class="form-group"><label>Notes</label><input type="text" id="po-notes" placeholder="Optional"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Tracking / B-L No.</label><input type="text" id="po-tracking" placeholder="Sea freight tracking no."></div>
+      <div class="form-group"><label>Notes</label><input type="text" id="po-notes" placeholder="Optional"></div>
+    </div>
     <div class="form-group">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <label style="margin:0">Items (materials to purchase)</label>
@@ -2653,6 +2656,7 @@ function renderPOs(data) {
       <td>${nextEta||'—'}</td>
       <td>${lead!=null?lead+' days':'—'}</td>
       <td style="white-space:nowrap">
+        ${p.tracking_no?`<a class="btn btn-secondary btn-sm" href="https://zzwl.jywl.net/" target="_blank" title="Sea-freight tracking (${p.tracking_no})"><i class="ti ti-ship"></i></a>`:''}
         <button class="btn btn-secondary btn-sm" onclick="openTrack('${p.id}')" title="Update progress"><i class="ti ti-timeline-event"></i></button>
         ${p.stage!=='received'?`<button class="btn btn-success btn-sm" onclick="openGRN('${p.id}')" title="Receive"><i class="ti ti-package-import"></i></button>`:''}
         ${isAdmin?`<button class="btn btn-secondary btn-sm" onclick="editPO('${p.id}')"><i class="ti ti-edit"></i></button> <button class="btn btn-danger btn-sm" onclick="deletePO('${p.id}')"><i class="ti ti-trash"></i></button>`:''}
@@ -2688,6 +2692,7 @@ async function openPOModal(data=null){
   document.getElementById('po-type').value=data?.type||'local';
   document.getElementById('po-reqdate').value=data?.req_date||new Date().toISOString().slice(0,10);
   document.getElementById('po-notes').value=data?.notes||'';
+  document.getElementById('po-tracking').value=data?.tracking_no||'';
   document.getElementById('po-lines').innerHTML=''; poLineSeq=0;
   if (data?.items?.length) data.items.forEach(it=>addPOLine(it.rm_id,it.qty_ordered)); else addPOLine();
   openModal('modal-po');
@@ -2703,7 +2708,7 @@ async function savePO(){
   if(!document.getElementById('po-no').value) return toast('Enter PO Ref','error');
   const payload={ po_no:document.getElementById('po-no').value, supplier:document.getElementById('po-supplier').value,
     type:document.getElementById('po-type').value, req_date:document.getElementById('po-reqdate').value||null,
-    notes:document.getElementById('po-notes').value };
+    notes:document.getElementById('po-notes').value, tracking_no:document.getElementById('po-tracking').value||null };
   let poId=id;
   if(id){ await sb.from('purchase_orders').update(payload).eq('id',id); await sb.from('po_items').delete().eq('po_id',id); }
   else { payload.stage='requested'; payload.created_by=currentUser.id; const { data, error }=await sb.from('purchase_orders').insert(payload).select().single(); if(error) return toast('Save failed: '+error.message,'error'); poId=data.id; }
