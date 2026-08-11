@@ -2752,7 +2752,11 @@ async function savePO(){
   let poId=id;
   if(id){ await sb.from('purchase_orders').update(payload).eq('id',id); await sb.from('po_items').delete().eq('po_id',id); }
   else { payload.stage='requested'; payload.created_by=currentUser.id; const { data, error }=await sb.from('purchase_orders').insert(payload).select().single(); if(error) return toast('Save failed: '+error.message,'error'); poId=data.id; }
-  if(lines.length) await sb.from('po_items').insert(lines.map(l=>({po_id:poId, rm_id:l.rm_id, rm_name:l.rm_name, qty_ordered:l.qty_ordered, qty_received:0})));
+  if(lines.length){
+    const { data: ins, error: ie } = await sb.from('po_items').insert(lines.map(l=>({po_id:poId, rm_id:l.rm_id, rm_name:l.rm_name, qty_ordered:l.qty_ordered, qty_received:0}))).select();
+    if(ie) return toast('Items not saved: '+ie.message,'error');
+    if(!ins||!ins.length) return toast('Items not saved (0 rows) — run: alter table po_items disable row level security;','error');
+  }
   closeModal('modal-po'); toast('Order saved'); loadPurchasing();
 }
 async function deletePO(id){ if(!confirm('Delete this order?'))return; await sb.from('po_items').delete().eq('po_id',id); await sb.from('purchase_orders').delete().eq('id',id); toast('Deleted'); loadPurchasing(); }
