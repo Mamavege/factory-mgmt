@@ -2664,15 +2664,16 @@ function renderPOs(data) {
     // next milestone eta for display
     const nextEta = p.stage==='received' ? (p.delivered_date||'') : (p.eta_hq||p.eta||p.etd||p.delivered_date||'');
     const lead = daysBetween(p.req_date, p.delivered_date);
+    const trackUrl = p.tracking_no ? ('https://zzwl.jywl.net/checkexpress?s=1&order_tracking_search='+encodeURIComponent(p.tracking_no)+'&search-submit=%E8%BF%90%E5%8D%95%E6%9F%A5%E8%AF%A2') : '';
     return `<tr>
-      <td><strong>${p.po_no||'—'}</strong></td><td>${p.supplier||'—'}</td>
+      <td><strong>${p.po_no||'—'}</strong>${p.tracking_no?`<br><a href="${trackUrl}" target="_blank" style="font-size:11px;color:var(--primary,#6d5efc)"><i class="ti ti-ship" style="font-size:11px"></i> ${p.tracking_no}</a>`:''}</td><td>${p.supplier||'—'}</td>
       <td>${p.type==='import'?'🚢 Import':'Local'}</td>
       <td>${poStageBadge(p.stage||'requested')}</td>
       <td>${p.req_date||'—'}</td>
       <td>${nextEta||'—'}</td>
       <td>${lead!=null?lead+' days':'—'}</td>
       <td style="white-space:nowrap">
-        ${p.tracking_no?`<a class="btn btn-secondary btn-sm" href="https://zzwl.jywl.net/" target="_blank" title="Sea-freight tracking (${p.tracking_no})"><i class="ti ti-ship"></i></a>`:''}
+        ${p.tracking_no?`<a class="btn btn-secondary btn-sm" href="${trackUrl}" target="_blank" title="Track ${p.tracking_no}"><i class="ti ti-ship"></i></a>`:''}
         <button class="btn btn-secondary btn-sm" onclick="openPOTimeline('${p.id}')" title="Timeline"><i class="ti ti-list-check"></i></button>
         <button class="btn btn-secondary btn-sm" onclick="openTrack('${p.id}')" title="Update progress"><i class="ti ti-timeline-event"></i></button>
         ${p.stage!=='received'?`<button class="btn btn-success btn-sm" onclick="openGRN('${p.id}')" title="Receive"><i class="ti ti-package-import"></i></button>`:''}
@@ -2699,11 +2700,14 @@ function addPOLine(rmId='',qty=''){
   const supplier=document.getElementById('po-supplier')?.value||'';
   const div=document.createElement('div'); div.className='po-line'; div.id=id;
   div.style.cssText='display:flex;gap:6px;margin-bottom:6px;align-items:center';
-  div.innerHTML=`<select class="pol-rm" style="flex:1">${rmOptions(rmId,supplier)}</select>
-    <input type="number" class="pol-qty" placeholder="Qty" step="0.01" min="0" value="${qty}" style="width:90px">
+  const unit0=(allRawMat.find(m=>m.id===rmId)||{}).unit||'';
+  div.innerHTML=`<select class="pol-rm" style="flex:1" onchange="polUpdateUnit(this)">${rmOptions(rmId,supplier)}</select>
+    <input type="number" class="pol-qty" placeholder="Qty" step="0.01" min="0" value="${qty}" style="width:80px">
+    <span class="pol-unit" style="min-width:34px;font-size:12px;color:var(--text-muted)">${unit0}</span>
     <button class="btn btn-danger btn-sm" onclick="this.closest('.po-line').remove()"><i class="ti ti-x"></i></button>`;
   document.getElementById('po-lines').appendChild(div);
 }
+function polUpdateUnit(sel){ const m=allRawMat.find(x=>x.id===sel.value); const s=sel.closest('.po-line').querySelector('.pol-unit'); if(s) s.textContent=m?.unit||''; }
 // When supplier changes, auto-fill the items we normally buy from them
 function poSupplierChanged(){
   const supplier=document.getElementById('po-supplier').value;
