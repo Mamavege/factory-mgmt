@@ -1294,9 +1294,13 @@
       <div class="form-group"><label>Type</label><select id="po-type" onchange="renderPOStageInfo()"><option value="local">Local</option><option value="import">Import (China)</option></select></div>
       <div class="form-group"><label>Request Date</label><input type="date" id="po-reqdate"></div>
     </div>
-    <div class="form-row">
-      <div class="form-group"><label>Tracking / B-L No. <span style="font-size:11px;color:var(--text-muted)">(no. or full URL)</span></label><input type="text" id="po-tracking" placeholder="ZZ-743639 or paste full link"></div>
-      <div class="form-group"><label>Notes</label><input type="text" id="po-notes" placeholder="Optional"></div>
+    <div class="form-group"><label>Notes</label><input type="text" id="po-notes" placeholder="Optional"></div>
+    <div class="form-group">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label style="margin:0">Shipments / Transport <span style="font-size:11px;color:var(--text-muted)">(add 1 per transporter — split for lower delay risk)</span></label>
+        <button class="btn btn-secondary btn-sm" style="width:auto" onclick="addShipLine()"><i class="ti ti-plus"></i> Add Transport</button>
+      </div>
+      <div id="po-ships"></div>
     </div>
     <div class="form-group">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -2707,17 +2711,50 @@ function poItemsText(p){ const its=p.items||[]; return its.map(it=>{ const m=all
 function poStageBadge(s){ const m={requested:'badge-gray',ordered:'badge-info',paid:'badge-purple',china_wh:'badge-info',shipped:'badge-warning',arrived_port:'badge-warning',customs:'badge-warning',delivered_hq:'badge-info',delivered:'badge-info',received:'badge-success',cancelled:'badge-danger'}; return `<span class="badge ${m[s]||'badge-gray'}">${STAGE_LABEL[s]||s}</span>`; }
 function daysBetween(a,b){ if(!a||!b) return null; return Math.round((new Date(b)-new Date(a))/86400000); }
 // Build the tracking URL: paste a full URL → used as-is; type just a number → auto-build the zzwl link
-function poTrackUrl(t){ if(!t) return ''; t=t.trim(); if(/^https?:\/\//i.test(t)) return t; return 'https://zzwl.jywl.net/checkexpress?s=1&order_tracking_search='+encodeURIComponent(t)+'&search-submit=%E8%BF%90%E5%8D%95%E6%9F%A5%E8%AF%A2'; }
+// Transporters. build() turns a tracking number into a lookup URL; a pasted full URL is always used as-is.
+const CARRIERS = {
+  jywl: { label:'JY WL (zzwl)',  build:(n)=> 'https://zzwl.jywl.net/checkexpress?s=1&order_tracking_search='+encodeURIComponent(n)+'&search-submit=%E8%BF%90%E5%8D%95%E6%9F%A5%E8%AF%A2' },
+  ctw:  { label:'CTW (ctw518)',  build:(n)=> 'https://www.ctw518.com/LogisticInfo.aspx' },   // no public deep-link; opens lookup page
+  other:{ label:'Other',          build:(n)=> '' },
+};
+function carrierLabel(c){ return CARRIERS[c]?.label || 'Transport'; }
+function poTrackUrl(t, carrier){
+  if(!t) return '';
+  t=String(t).trim();
+  if(/^https?:\/\//i.test(t)) return t;               // full URL pasted → use as-is
+  return (CARRIERS[carrier]||CARRIERS.jywl).build(t);  // default to JYWL for legacy tracking_no
+}
+// Normalise an order's shipments: prefer the shipments array, fall back to legacy tracking_no
+function poShipments(p){
+  if(Array.isArray(p.shipments) && p.shipments.length) return p.shipments.filter(s=>s&&s.no);
+  if(p.tracking_no) return [{carrier:'jywl', no:p.tracking_no}];
+  return [];
+}
+let shipSeq=0;
+function addShipLine(carrier='jywl', no=''){
+  const id='ship'+(shipSeq++);
+  const div=document.createElement('div'); div.className='po-ship'; div.id=id;
+  div.style.cssText='display:flex;gap:6px;margin-bottom:6px;align-items:center';
+  div.innerHTML=`<select class="ship-carrier" style="width:150px">${Object.keys(CARRIERS).map(k=>`<option value="${k}"${k===carrier?' selected':''}>${CARRIERS[k].label}</option>`).join('')}</select>
+    <input type="text" class="ship-no" placeholder="Tracking / B-L no. or full URL" value="${no.replace(/"/g,'&quot;')}" style="flex:1">
+    <button class="btn btn-danger btn-sm" onclick="this.closest('.po-ship').remove()"><i class="ti ti-x"></i></button>`;
+  document.getElementById('po-ships').appendChild(div);
+}
 function renderPOs(data) {
   const isAdmin=currentProfile?.role==='admin';
   document.getElementById('po-tbody').innerHTML = data.length ? data.map(p=>{
     // next milestone eta for display
     const nextEta = p.stage==='received' ? (p.delivered_date||'') : (p.eta_hq||p.eta||p.etd||p.delivered_date||'');
     const lead = daysBetween(p.req_date, p.delivered_date);
-    const trackUrl = poTrackUrl(p.tracking_no);
-    const trackLabel = p.tracking_no ? (/^https?:\/\//i.test(p.tracking_no.trim()) ? 'Track shipment' : p.tracking_no) : '';
+    const ships = poShipments(p);
+    const shipLinks = ships.map(s=>{
+      const url=poTrackUrl(s.no, s.carrier);
+      const lbl=/^https?:\/\//i.test(String(s.no).trim())?'link':s.no;
+      const inner=`<i class="ti ti-ship" style="font-size:11px"></i> ${carrierLabel(s.carrier)}: ${lbl}`;
+      return url?`<a href="${url}" target="_blank" style="font-size:11px;color:var(--primary,#6d5efc)">${inner}</a>`:`<span style="font-size:11px;color:var(--text-muted)">${inner}</span>`;
+    }).join('<br>');
     return `<tr>
-      <td><strong>${p.po_no||'—'}</strong>${p.tracking_no?`<br><a href="${trackUrl}" target="_blank" style="font-size:11px;color:var(--primary,#6d5efc)"><i class="ti ti-ship" style="font-size:11px"></i> ${trackLabel}</a>`:''}</td><td>${p.supplier||'—'}</td>
+      <td><strong>${p.po_no||'—'}</strong>${shipLinks?`<br>${shipLinks}`:''}</td><td>${p.supplier||'—'}</td>
       <td style="max-width:240px;font-size:12px;white-space:normal">${poItemsText(p)||'—'}</td>
       <td>${p.type==='import'?'🚢 Import':'Local'}</td>
       <td>${poStageBadge(p.stage||'requested')}</td>
@@ -2725,7 +2762,7 @@ function renderPOs(data) {
       <td>${nextEta||'—'}</td>
       <td>${lead!=null?lead+' days':'—'}</td>
       <td style="white-space:nowrap">
-        ${p.tracking_no?`<a class="btn btn-secondary btn-sm" href="${trackUrl}" target="_blank" title="Track ${trackLabel}"><i class="ti ti-ship"></i></a>`:''}
+        ${ships.map(s=>{const url=poTrackUrl(s.no,s.carrier);return url?`<a class="btn btn-secondary btn-sm" href="${url}" target="_blank" title="Track ${carrierLabel(s.carrier)}: ${s.no}"><i class="ti ti-ship"></i></a>`:'';}).join('')}
         <button class="btn btn-secondary btn-sm" onclick="openPOTimeline('${p.id}')" title="Timeline"><i class="ti ti-list-check"></i></button>
         <button class="btn btn-secondary btn-sm" onclick="openTrack('${p.id}')" title="Update progress"><i class="ti ti-timeline-event"></i></button>
         ${p.stage!=='received'?`<button class="btn btn-success btn-sm" onclick="openGRN('${p.id}')" title="Receive"><i class="ti ti-package-import"></i></button>`:''}
@@ -2778,7 +2815,9 @@ async function openPOModal(data=null){
   document.getElementById('po-type').value=data?.type||'local';
   document.getElementById('po-reqdate').value=data?.req_date||new Date().toISOString().slice(0,10);
   document.getElementById('po-notes').value=data?.notes||'';
-  document.getElementById('po-tracking').value=data?.tracking_no||'';
+  document.getElementById('po-ships').innerHTML=''; shipSeq=0;
+  const ships = data?poShipments(data):[];
+  if (ships.length) ships.forEach(s=>addShipLine(s.carrier||'jywl', s.no||'')); else addShipLine();
   document.getElementById('po-lines').innerHTML=''; poLineSeq=0;
   if (data?.items?.length) data.items.forEach(it=>addPOLine(it.rm_id,it.qty_ordered)); else addPOLine();
   openModal('modal-po');
@@ -2792,9 +2831,15 @@ async function savePO(){
     if(rm&&qty>0){ const m=allRawMat.find(x=>x.id===rm); lines.push({rm_id:rm, rm_name:m?.name||'', qty_ordered:qty}); }
   });
   if(!document.getElementById('po-no').value) return toast('Enter PO Ref','error');
+  const ships=[];
+  document.querySelectorAll('#po-ships .po-ship').forEach(el=>{
+    const no=el.querySelector('.ship-no').value.trim(); const carrier=el.querySelector('.ship-carrier').value;
+    if(no) ships.push({carrier, no});
+  });
   const payload={ po_no:document.getElementById('po-no').value, supplier:document.getElementById('po-supplier').value,
     type:document.getElementById('po-type').value, req_date:document.getElementById('po-reqdate').value||null,
-    notes:document.getElementById('po-notes').value, tracking_no:document.getElementById('po-tracking').value||null };
+    notes:document.getElementById('po-notes').value,
+    shipments:ships, tracking_no:ships[0]?.no||null };
   let poId=id;
   if(id){ await sb.from('purchase_orders').update(payload).eq('id',id); await sb.from('po_items').delete().eq('po_id',id); }
   else { payload.stage='requested'; payload.created_by=currentUser.id; const { data, error }=await sb.from('purchase_orders').insert(payload).select().single(); if(error) return toast('Save failed: '+error.message,'error'); poId=data.id; }
