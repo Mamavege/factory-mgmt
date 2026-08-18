@@ -768,7 +768,7 @@
         </div>
         <div class="card"><div class="table-wrap">
           <table>
-            <thead><tr><th>PO Ref</th><th>Supplier</th><th>Items</th><th>Type</th><th>Stage</th><th>Requested</th><th>Next / ETA</th><th>Lead Time</th><th>Actions</th></tr></thead>
+            <thead><tr><th>PO Ref / Order No.</th><th>Supplier</th><th>Items</th><th>Type</th><th>Stage</th><th>Requested</th><th>Next / ETA</th><th>Lead Time</th><th>Actions</th></tr></thead>
             <tbody id="po-tbody"></tbody>
           </table>
         </div></div>
@@ -1287,7 +1287,7 @@
     <h2 id="modal-po-title">New Purchase Order</h2>
     <input type="hidden" id="po-id">
     <div class="form-row">
-      <div class="form-group"><label>PO Ref <span style="font-size:11px;color:var(--text-muted)">(AutoCount PO no.)</span></label><input type="text" id="po-no" placeholder="e.g. PO-2026-001"></div>
+      <div class="form-group"><label>PO Ref / Order No. <span style="font-size:11px;color:var(--text-muted)">(purchaser fills after request)</span></label><input type="text" id="po-no" placeholder="Leave blank — purchaser keys later"></div>
       <div class="form-group"><label>Supplier</label><select id="po-supplier" onchange="poSupplierChanged()"></select></div>
     </div>
     <div class="form-row">
@@ -1298,7 +1298,7 @@
     <div class="form-group">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <label style="margin:0">Shipments / Transport <span style="font-size:11px;color:var(--text-muted)">(add 1 per transporter — split for lower delay risk)</span></label>
-        <button class="btn btn-secondary btn-sm" style="width:auto" onclick="addShipLine()"><i class="ti ti-plus"></i> Add Transport</button>
+        <button class="btn btn-secondary btn-sm" style="width:auto" onclick="addTransportLine()"><i class="ti ti-plus"></i> Add Transport</button>
       </div>
       <div id="po-ships"></div>
     </div>
@@ -2731,7 +2731,7 @@ function poShipments(p){
   return [];
 }
 let shipSeq=0;
-function addShipLine(carrier='jywl', no=''){
+function addTransportLine(carrier='jywl', no=''){
   const id='ship'+(shipSeq++);
   const div=document.createElement('div'); div.className='po-ship'; div.id=id;
   div.style.cssText='display:flex;gap:6px;margin-bottom:6px;align-items:center';
@@ -2817,7 +2817,7 @@ async function openPOModal(data=null){
   document.getElementById('po-notes').value=data?.notes||'';
   document.getElementById('po-ships').innerHTML=''; shipSeq=0;
   const ships = data?poShipments(data):[];
-  if (ships.length) ships.forEach(s=>addShipLine(s.carrier||'jywl', s.no||'')); else addShipLine();
+  if (ships.length) ships.forEach(s=>addTransportLine(s.carrier||'jywl', s.no||'')); else addTransportLine();
   document.getElementById('po-lines').innerHTML=''; poLineSeq=0;
   if (data?.items?.length) data.items.forEach(it=>addPOLine(it.rm_id,it.qty_ordered)); else addPOLine();
   openModal('modal-po');
@@ -2830,13 +2830,13 @@ async function savePO(){
     const rm=el.querySelector('.pol-rm').value; const qty=parseFloat(el.querySelector('.pol-qty').value)||0;
     if(rm&&qty>0){ const m=allRawMat.find(x=>x.id===rm); lines.push({rm_id:rm, rm_name:m?.name||'', qty_ordered:qty}); }
   });
-  if(!document.getElementById('po-no').value) return toast('Enter PO Ref','error');
+  if(!document.getElementById('po-supplier').value) return toast('Select a supplier','error');
   const ships=[];
   document.querySelectorAll('#po-ships .po-ship').forEach(el=>{
     const no=el.querySelector('.ship-no').value.trim(); const carrier=el.querySelector('.ship-carrier').value;
     if(no) ships.push({carrier, no});
   });
-  const payload={ po_no:document.getElementById('po-no').value, supplier:document.getElementById('po-supplier').value,
+  const payload={ po_no:document.getElementById('po-no').value||null, supplier:document.getElementById('po-supplier').value,
     type:document.getElementById('po-type').value, req_date:document.getElementById('po-reqdate').value||null,
     notes:document.getElementById('po-notes').value,
     shipments:ships, tracking_no:ships[0]?.no||null };
