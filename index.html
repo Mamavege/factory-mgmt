@@ -460,7 +460,7 @@
           <i class="ti ti-calculator"></i> Costing
         </div>
       </div>
-      <div class="nav-section admin-only" style="display:none">
+      <div class="nav-section admin-only-sec" style="display:none">
         <div class="nav-section-label">Administration</div>
         <div class="nav-item" onclick="goTo('employees')">
           <i class="ti ti-users-group"></i> Team &amp; Access
@@ -1813,6 +1813,7 @@ async function loadProfile() {
   if (data?.role === 'admin') {
     document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'flex');
     document.querySelectorAll('.admin-only-opt').forEach(el => el.style.display = 'block');
+    document.querySelectorAll('.admin-only-sec').forEach(el => el.style.display = 'block');
   }
   applyPagePermissions();
 }
