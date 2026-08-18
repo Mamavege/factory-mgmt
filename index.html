@@ -460,6 +460,12 @@
           <i class="ti ti-calculator"></i> Costing
         </div>
       </div>
+      <div class="nav-section admin-only" style="display:none">
+        <div class="nav-section-label">Administration</div>
+        <div class="nav-item" onclick="goTo('employees')">
+          <i class="ti ti-users-group"></i> Team &amp; Access
+        </div>
+      </div>
     </nav>
     <div class="sidebar-footer">
       <div class="user-info" onclick="handleLogout()">
@@ -1838,7 +1844,7 @@ function applyPagePermissions(){
 const pageTitles = {
   dashboard: 'Dashboard', workorders: 'Work Orders', inventory: 'Inventory',
   transactions: 'Stock In / Out', wip: 'WIP Monitoring', shipment: 'Shipment m³', ai: 'AI Assistant',
-  costing: 'Costing', rawmat: 'Raw Materials', purchasing: 'Purchasing'
+  costing: 'Costing', rawmat: 'Raw Materials', purchasing: 'Purchasing', employees: 'Team & Access'
 };
 const pageActions = {
   workorders: () => currentProfile?.role==='admin' ? `<button class="btn btn-primary" style="width:auto" onclick="openWOModal()"><i class="ti ti-plus"></i> New Order</button>` : '',
@@ -1867,7 +1873,7 @@ function goTo(page) {
 }
 
 function loadPage(page) {
-  const map = { dashboard:loadDashboard, workorders:loadWorkOrders, inventory:loadInventory, transactions:loadTransactions, wip:loadWip, shipment:loadShipment, costing:costingLoad, rawmat:loadRawMat, purchasing:loadPurchasing };
+  const map = { dashboard:loadDashboard, workorders:loadWorkOrders, inventory:loadInventory, transactions:loadTransactions, wip:loadWip, shipment:loadShipment, costing:costingLoad, rawmat:loadRawMat, purchasing:loadPurchasing, employees:loadEmployees };
   map[page]?.();
 }
 
