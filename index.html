@@ -417,46 +417,46 @@
     <nav class="sidebar-nav">
       <div class="nav-section">
         <div class="nav-section-label">Overview</div>
-        <div class="nav-item active" onclick="goTo('dashboard')">
+        <div class="nav-item active" data-page="dashboard" onclick="goTo('dashboard')">
           <i class="ti ti-layout-dashboard"></i> Dashboard
         </div>
       </div>
       <div class="nav-section">
         <div class="nav-section-label">Production</div>
-        <div class="nav-item" onclick="goTo('workorders')">
+        <div class="nav-item" data-page="workorders" onclick="goTo('workorders')">
           <i class="ti ti-clipboard-list"></i> Work Orders
         </div>
-        <div class="nav-item" onclick="goTo('wip')">
+        <div class="nav-item" data-page="wip" onclick="goTo('wip')">
           <i class="ti ti-activity"></i> WIP Monitoring
         </div>
       </div>
       <div class="nav-section">
         <div class="nav-section-label">Warehouse</div>
-        <div class="nav-item" onclick="goTo('inventory')">
+        <div class="nav-item" data-page="inventory" onclick="goTo('inventory')">
           <i class="ti ti-box"></i> Inventory
         </div>
-        <div class="nav-item" onclick="goTo('transactions')">
+        <div class="nav-item" data-page="transactions" onclick="goTo('transactions')">
           <i class="ti ti-arrows-exchange"></i> Stock In / Out
         </div>
-        <div class="nav-item" onclick="goTo('rawmat')">
+        <div class="nav-item" data-page="rawmat" onclick="goTo('rawmat')">
           <i class="ti ti-leaf"></i> Raw Materials
         </div>
-        <div class="nav-item" onclick="goTo('purchasing')">
+        <div class="nav-item" data-page="purchasing" onclick="goTo('purchasing')">
           <i class="ti ti-shopping-cart"></i> Purchasing
         </div>
-        <div class="nav-item" onclick="goTo('shipment')">
+        <div class="nav-item" data-page="shipment" onclick="goTo('shipment')">
           <i class="ti ti-ship"></i> Shipment m³
         </div>
       </div>
       <div class="nav-section">
         <div class="nav-section-label">Intelligence</div>
-        <div class="nav-item" onclick="goTo('ai')">
+        <div class="nav-item" data-page="ai" onclick="goTo('ai')">
           <i class="ti ti-robot"></i> AI Assistant
         </div>
       </div>
       <div class="nav-section">
         <div class="nav-section-label">Finance</div>
-        <div class="nav-item" onclick="goTo('costing')">
+        <div class="nav-item" data-page="costing" onclick="goTo('costing')">
           <i class="ti ti-calculator"></i> Costing
         </div>
       </div>
@@ -1244,6 +1244,19 @@
   </div>
 </div>
 
+<!-- Page Access Modal -->
+<div class="modal-overlay" id="modal-access">
+  <div class="modal">
+    <h2>Page Access</h2>
+    <p style="font-size:13px;color:var(--text-muted);margin:-6px 0 10px">Tick the pages <strong id="access-name"></strong> can see. Unticked pages are hidden from their menu.</p>
+    <div id="access-list" style="max-height:320px;overflow:auto;border:1.5px solid var(--border);border-radius:8px;padding:6px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-access')">Cancel</button>
+      <button class="btn btn-primary" style="width:auto" onclick="saveAccess()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Suppliers Modal -->
 <div class="modal-overlay" id="modal-suppliers">
   <div class="modal">
@@ -1795,6 +1808,30 @@ async function loadProfile() {
     document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'flex');
     document.querySelectorAll('.admin-only-opt').forEach(el => el.style.display = 'block');
   }
+  applyPagePermissions();
+}
+// Pages a user may open. Admins: everything. Employees: everything unless allowed_pages is set,
+// in which case only the listed pages show.
+function allowedPagesFor(profile){
+  if (!profile || profile.role==='admin') return null; // null = all
+  const ap = profile.allowed_pages;
+  if (!ap || (Array.isArray(ap) && ap.length===0)) return null; // not restricted yet → all
+  return Array.isArray(ap) ? ap : null;
+}
+function applyPagePermissions(){
+  const allow = allowedPagesFor(currentProfile);
+  document.querySelectorAll('.nav-item[data-page]').forEach(el=>{
+    const p = el.getAttribute('data-page');
+    el.style.display = (!allow || allow.includes(p)) ? '' : 'none';
+  });
+  // If the current page is now hidden, jump to the first allowed one
+  if (allow){
+    const active = document.querySelector('.page.active')?.id?.replace('page-','');
+    if (active && !allow.includes(active)){
+      const first = document.querySelector('.nav-item[data-page]:not([style*="none"])');
+      if (first) first.click();
+    }
+  }
 }
 
 // ─── NAVIGATION ──────────────────────────────────────
@@ -1817,6 +1854,8 @@ function toggleSidebar() { document.body.classList.toggle('sidebar-collapsed'); 
 // Collapse by default on small screens
 if (window.innerWidth <= 768) document.body.classList.add('sidebar-collapsed');
 function goTo(page) {
+  const allow = allowedPagesFor(currentProfile);
+  if (allow && !allow.includes(page)) { toast('You do not have access to this page','error'); return; }
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
@@ -3019,7 +3058,7 @@ function renderWipStations() {
             ${hasBatch?`<td style="padding:7px 12px;font-size:12px">${e.batch_no||'—'}</td>`:''}
             ${showYield?td(e.input_kg??'—'):''}
             ${td(e.output_kg??'—','font-weight:600')}
-            ${st.id==='filling'?`<td style="padding:7px 12px;font-size:12px;text-align:right"><label style="display:inline-flex;align-items:center;gap:5px;justify-content:flex-end;cursor:pointer" title="Tick when this batch is used up"><input type="checkbox" onchange="toggleDepleted('${e.id}',this.checked)"${e.depleted?' checked':''}><span style="font-weight:700;color:${e.depleted?'var(--text-muted)':'var(--success)'}">${e.depleted?'used up':(e.batch_no&&fillInfo?(fillInfo.rem[e.batch_no]??0).toFixed(0):'—')}</span></label></td>`:''}
+            ${st.id==='filling'?`<td style="padding:7px 12px;font-size:12px;text-align:right"><label style="display:inline-flex;align-items:center;gap:5px;justify-content:flex-end;cursor:pointer" title="Tick when this batch is used up"><input type="checkbox" onchange="toggleDepleted('${e.id}',this.checked)"${e.depleted?' checked':''}><span style="font-weight:700;color:${e.depleted?'var(--text-muted)':'var(--success)'}">${e.depleted?'used up':(e.batch_no&&fillInfo?((fillInfo.remById[e.id]??fillInfo.rem[e.batch_no])||0).toFixed(0):'—')}</span></label></td>`:''}
             ${showYield?td(yld,'color:var(--success);font-weight:600'):''}
             ${showYield?td(e.wastage_kg??'—','color:var(--warning)'):''}
             ${td(e.reject_qty??'—','color:var(--danger)')}
@@ -3037,11 +3076,14 @@ function renderWipStations() {
   }).join('');
 }
 // Semi balance per filling batch = filling output − packing used (across all packing entries)
+// remById gives each filling ENTRY its own balance (packing consumed is allocated oldest-first),
+// so a batch used on several filling logs never shows a total larger than one row's own output.
 function fillingBatchInfo(excludeId) {
-  const out={}, used={}, prod={}, depleted=new Set();
+  const out={}, used={}, prod={}, depleted=new Set(), fillEntries={};
   allWip.forEach(e=>{
     if (e.workstation==='filling' && e.batch_no) {
       out[e.batch_no] = (out[e.batch_no]||0) + (parseFloat(e.output_kg)||0);
+      (fillEntries[e.batch_no]=fillEntries[e.batch_no]||[]).push(e);
       if (e.product_name && !prod[e.batch_no]) prod[e.batch_no] = e.product_name;
       if (e.depleted) depleted.add(e.batch_no);
     }
@@ -3050,8 +3092,19 @@ function fillingBatchInfo(excludeId) {
     }
   });
   const rem={}; Object.keys(out).forEach(b=> rem[b]=out[b]-(used[b]||0));
+  // Allocate each batch's packing usage across its filling entries, oldest first
+  const remById={};
+  Object.keys(fillEntries).forEach(b=>{
+    let left = used[b]||0;
+    fillEntries[b].sort((a,c)=>((a.work_date||'')+(a.id||'')).localeCompare((c.work_date||'')+(c.id||'')));
+    fillEntries[b].forEach(e=>{
+      const o=parseFloat(e.output_kg)||0;
+      const take=Math.min(o,left); left-=take;
+      remById[e.id]= depleted.has(b)?0:(o-take);
+    });
+  });
   depleted.forEach(b=>{ if(b in rem) rem[b]=0; });   // manually marked used-up → balance 0
-  return { out, used, rem, prod, depleted };
+  return { out, used, rem, remById, prod, depleted };
 }
 async function toggleDepleted(id, val) {
   const { error } = await sb.from('wip_entries').update({depleted:val}).eq('id',id);
@@ -3471,10 +3524,34 @@ async function loadEmployees() {
     <td><span class="badge ${e.role==='admin'?'badge-purple':'badge-gray'}">${e.role==='admin'?'Admin':'Employee'}</span></td>
     <td>${fmtDate(e.created_at)}</td>
     <td>${e.id!==currentUser.id
-      ? `<button class="btn btn-secondary btn-sm" onclick="toggleRole('${e.id}','${e.role}')"><i class="ti ti-arrows-exchange"></i> Toggle Role</button>`
+      ? `<button class="btn btn-secondary btn-sm" onclick="toggleRole('${e.id}','${e.role}')"><i class="ti ti-arrows-exchange"></i> Toggle Role</button> ${e.role!=='admin'?`<button class="btn btn-secondary btn-sm" onclick="openAccessModal('${e.id}')"><i class="ti ti-lock-access"></i> Access</button>`:'<span style="color:var(--text-muted);font-size:11px">all pages</span>'}`
       : '<span style="color:var(--text-muted);font-size:12px">(You)</span>'
     }</td>
   </tr>`).join('') : '<tr><td colspan="5"><div class="empty-state"><p>No employees found</p></div></td></tr>';
+}
+// ─── PER-USER PAGE ACCESS ───
+const ACCESS_PAGES = [
+  ['dashboard','Dashboard'],['workorders','Work Orders'],['wip','WIP Monitoring'],
+  ['inventory','Inventory'],['transactions','Stock In / Out'],['rawmat','Raw Materials'],
+  ['purchasing','Purchasing'],['shipment','Shipment m³'],['ai','AI Assistant'],['costing','Costing']
+];
+let accessUserId = null;
+async function openAccessModal(id){
+  accessUserId = id;
+  const { data: p } = await sb.from('profiles').select('name,allowed_pages').eq('id',id).single();
+  const allow = (Array.isArray(p?.allowed_pages)&&p.allowed_pages.length) ? p.allowed_pages : ACCESS_PAGES.map(x=>x[0]); // default all ticked
+  document.getElementById('access-name').textContent = p?.name || '';
+  document.getElementById('access-list').innerHTML = ACCESS_PAGES.map(([k,lbl])=>`
+    <label style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px">
+      <input type="checkbox" class="access-cb" value="${k}" style="width:16px;height:16px;margin:0"${allow.includes(k)?' checked':''}> ${lbl}
+    </label>`).join('');
+  openModal('modal-access');
+}
+async function saveAccess(){
+  const pages = [...document.querySelectorAll('.access-cb:checked')].map(cb=>cb.value);
+  const { error } = await sb.from('profiles').update({allowed_pages:pages}).eq('id',accessUserId);
+  if (error) return toast('Save failed: '+error.message,'error');
+  closeModal('modal-access'); toast('Access updated'); loadEmployees();
 }
 async function toggleRole(id, current) {
   const next = current==='admin'?'employee':'admin';
