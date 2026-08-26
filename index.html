@@ -2799,12 +2799,20 @@ function rmOptions(sel,supplier){
   return '<option value="">— Select material —</option>'+list.map(m=>`<option value="${m.id}"${sel===m.id?' selected':''}>${m.code?m.code+' — ':''}${m.name}${m.unit?' ('+m.unit+')':''}</option>`).join('');
 }
 // When a material is picked and the order has no supplier yet, fill it from the item's supplier(s)
+function setSupplierValue(name){
+  const sup=document.getElementById('po-supplier'); if(!sup||!name) return;
+  // make sure the name exists as an option (imported supplier names may not be in the list)
+  if(![...sup.options].some(o=>o.value===name)){ sup.add(new Option(name,name)); }
+  sup.value=name;
+}
 function polPickSupplier(sel){
   const m=allRawMat.find(x=>x.id===sel.value); if(!m) return;
-  const sup=document.getElementById('po-supplier'); if(!sup || sup.value) return;   // don't override an existing choice
+  const sup=document.getElementById('po-supplier'); if(!sup) return;
+  if(sup.value) return;   // don't override an existing choice
   const list=matSuppliers(m);
-  if(list.length===1){ sup.value=list[0]; }
+  if(list.length===1){ setSupplierValue(list[0]); }
   else if(list.length>1){ toast('This item has '+list.length+' suppliers: '+list.join(', ')+' — pick one in Supplier'); sup.focus(); }
+  else { toast('No supplier set for this item — add one in Raw Materials','error'); }
 }
 function addPOLine(rmId='',qty='',uom=''){
   const id='pol'+(poLineSeq++);
