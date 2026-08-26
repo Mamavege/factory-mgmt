@@ -1295,9 +1295,9 @@
       <div class="form-group"><label>Request Date</label><input type="date" id="po-reqdate"></div>
     </div>
     <div class="form-group"><label>Notes</label><input type="text" id="po-notes" placeholder="Optional"></div>
-    <div class="form-group">
+    <div class="form-group" id="po-ships-group">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <label style="margin:0">Shipments / Transport <span style="font-size:11px;color:var(--text-muted)">(add 1 per transporter — split for lower delay risk)</span></label>
+        <label style="margin:0">Shipments / Transport <span style="font-size:11px;color:var(--text-muted)">(import only — add 1 per transporter)</span></label>
         <button class="btn btn-secondary btn-sm" style="width:auto" onclick="addTransportLine()"><i class="ti ti-plus"></i> Add Transport</button>
       </div>
       <div id="po-ships"></div>
@@ -2707,7 +2707,7 @@ function filterPOs() {
   renderPOs(allPOs.filter(p=>(!q||p.po_no?.toLowerCase().includes(q)||p.supplier?.toLowerCase().includes(q)||poItemsText(p).toLowerCase().includes(q))&&(!s||p.stage===s)));
 }
 // Comma-separated item names (+ qty) for an order
-function poItemsText(p){ const its=p.items||[]; return its.map(it=>{ const m=allRawMat.find(x=>x.id===it.rm_id); const nm=it.rm_name||m?.name||it.rm_id||''; const u=m?.unit?(' '+m.unit):''; return nm+(it.qty_ordered?(' ×'+it.qty_ordered+u):''); }).join(', '); }
+function poItemsText(p){ const its=p.items||[]; return its.map(it=>{ const m=allRawMat.find(x=>x.id===it.rm_id); const nm=it.rm_name||m?.name||it.rm_id||''; const u=(it.uom||m?.unit)?(' '+(it.uom||m.unit)):''; return nm+(it.qty_ordered?(' ×'+it.qty_ordered+u):''); }).join(', '); }
 function poStageBadge(s){ const m={requested:'badge-gray',ordered:'badge-info',paid:'badge-purple',china_wh:'badge-info',shipped:'badge-warning',arrived_port:'badge-warning',customs:'badge-warning',delivered_hq:'badge-info',delivered:'badge-info',received:'badge-success',cancelled:'badge-danger'}; return `<span class="badge ${m[s]||'badge-gray'}">${STAGE_LABEL[s]||s}</span>`; }
 function daysBetween(a,b){ if(!a||!b) return null; return Math.round((new Date(b)-new Date(a))/86400000); }
 // Build the tracking URL: paste a full URL → used as-is; type just a number → auto-build the zzwl link
@@ -2794,19 +2794,20 @@ function rmOptions(sel,supplier){
   if(supplier){ const f=allRawMat.filter(m=>m.supplier===supplier); if(f.length) list=f; }
   return '<option value="">— Select material —</option>'+list.map(m=>`<option value="${m.id}"${sel===m.id?' selected':''}>${m.code?m.code+' — ':''}${m.name}${m.unit?' ('+m.unit+')':''}</option>`).join('');
 }
-function addPOLine(rmId='',qty=''){
+function addPOLine(rmId='',qty='',uom=''){
   const id='pol'+(poLineSeq++);
   const supplier=document.getElementById('po-supplier')?.value||'';
   const div=document.createElement('div'); div.className='po-line'; div.id=id;
   div.style.cssText='display:flex;gap:6px;margin-bottom:6px;align-items:center';
-  const unit0=(allRawMat.find(m=>m.id===rmId)||{}).unit||'';
+  const unit0=uom||(allRawMat.find(m=>m.id===rmId)||{}).unit||'';
   div.innerHTML=`<select class="pol-rm" style="flex:1" onchange="polUpdateUnit(this)">${rmOptions(rmId,supplier)}</select>
-    <input type="number" class="pol-qty" placeholder="Qty" step="0.01" min="0" value="${qty}" style="width:80px">
-    <span class="pol-unit" style="min-width:34px;font-size:12px;color:var(--text-muted)">${unit0}</span>
+    <input type="number" class="pol-qty" placeholder="Qty" step="0.01" min="0" value="${qty}" style="width:76px">
+    <input type="text" class="pol-uom" placeholder="UOM" value="${(unit0||'').replace(/"/g,'&quot;')}" style="width:64px" title="Order UOM — type freely (kg / CTN / roll)">
     <button class="btn btn-danger btn-sm" onclick="this.closest('.po-line').remove()"><i class="ti ti-x"></i></button>`;
   document.getElementById('po-lines').appendChild(div);
 }
-function polUpdateUnit(sel){ const m=allRawMat.find(x=>x.id===sel.value); const s=sel.closest('.po-line').querySelector('.pol-unit'); if(s) s.textContent=m?.unit||''; }
+// Prefill UOM from the material only if the field is still blank (keep whatever the user typed)
+function polUpdateUnit(sel){ const m=allRawMat.find(x=>x.id===sel.value); const u=sel.closest('.po-line').querySelector('.pol-uom'); if(u && !u.value) u.value=m?.unit||''; }
 // When supplier changes, auto-fill the items we normally buy from them
 function poSupplierChanged(){
   const supplier=document.getElementById('po-supplier').value;
@@ -2815,7 +2816,10 @@ function poSupplierChanged(){
   if(mats.length){ mats.forEach(m=>addPOLine(m.id,'')); }
   else { addPOLine(); }
 }
-function renderPOStageInfo(){}
+function renderPOStageInfo(){
+  const isImport = document.getElementById('po-type').value==='import';
+  document.getElementById('po-ships-group').style.display = isImport ? '' : 'none';
+}
 async function openPOModal(data=null){
   await loadSuppliers(); if(!allRawMat.length) await loadRawMat();
   document.getElementById('modal-po-title').textContent = data?'Edit Order':'New Purchase Order';
@@ -2829,7 +2833,8 @@ async function openPOModal(data=null){
   const ships = data?poShipments(data):[];
   if (ships.length) ships.forEach(s=>addTransportLine(s.carrier||'jywl', s.no||'')); else addTransportLine();
   document.getElementById('po-lines').innerHTML=''; poLineSeq=0;
-  if (data?.items?.length) data.items.forEach(it=>addPOLine(it.rm_id,it.qty_ordered)); else addPOLine();
+  if (data?.items?.length) data.items.forEach(it=>addPOLine(it.rm_id,it.qty_ordered,it.uom)); else addPOLine();
+  renderPOStageInfo();  // hide Shipments for local
   openModal('modal-po');
 }
 function editPO(id){ openPOModal(allPOs.find(x=>x.id===id)); }
@@ -2838,7 +2843,8 @@ async function savePO(){
   const lines=[];
   document.querySelectorAll('#po-lines .po-line').forEach(el=>{
     const rm=el.querySelector('.pol-rm').value; const qty=parseFloat(el.querySelector('.pol-qty').value)||0;
-    if(rm&&qty>0){ const m=allRawMat.find(x=>x.id===rm); lines.push({rm_id:rm, rm_name:m?.name||'', qty_ordered:qty}); }
+    const uom=el.querySelector('.pol-uom')?.value.trim()||null;
+    if(rm&&qty>0){ const m=allRawMat.find(x=>x.id===rm); lines.push({rm_id:rm, rm_name:m?.name||'', qty_ordered:qty, uom}); }
   });
   if(!document.getElementById('po-supplier').value) return toast('Select a supplier','error');
   const ships=[];
@@ -2854,7 +2860,7 @@ async function savePO(){
   if(id){ await sb.from('purchase_orders').update(payload).eq('id',id); await sb.from('po_items').delete().eq('po_id',id); }
   else { payload.stage='requested'; payload.created_by=currentUser.id; const { data, error }=await sb.from('purchase_orders').insert(payload).select().single(); if(error) return toast('Save failed: '+error.message,'error'); poId=data.id; }
   if(lines.length){
-    const { data: ins, error: ie } = await sb.from('po_items').insert(lines.map(l=>({po_id:poId, rm_id:l.rm_id, rm_name:l.rm_name, qty_ordered:l.qty_ordered, qty_received:0}))).select();
+    const { data: ins, error: ie } = await sb.from('po_items').insert(lines.map(l=>({po_id:poId, rm_id:l.rm_id, rm_name:l.rm_name, qty_ordered:l.qty_ordered, uom:l.uom, qty_received:0}))).select();
     if(ie) return toast('Items not saved: '+ie.message,'error');
     if(!ins||!ins.length) return toast('Items not saved (0 rows) — run: alter table po_items disable row level security;','error');
   }
