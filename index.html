@@ -4879,7 +4879,7 @@ function costingOpenProduct(type, code) {
       const sfRM = costingGetAutoOrManual(sf.code, 'raw_material', 'sf-rm-auto', 'sf-rm', sfPots, sfOut);
       const sfPk = costingGetAutoOrManual(sf.code, 'packaging',    'sf-pk-auto', 'sf-pk', sfPots, sfOut);
       const sfGs = costingGetAutoOrManual(sf.code, 'cooking_gas',  'sf-gs-auto', 'sf-gs', sfPots, sfOut);
-      const sfTr = Number(document.getElementById(`sf-tr-${sf.code}`)?.value) || 0;
+      const sfTr = costingGetAutoOrManual(sf.code, 'transport', 'sf-tr-auto', 'sf-tr', sfPots, sfOut);
       sfCPU[sf.code] = sfOut > 0 ? (sfRM + sfPk + sfTr + sfGs) / sfOut : 0;
     });
     const sfTotalCPU = fg.semiFG.reduce((s, c) => s + (sfCPU[c] || 0), 0);
