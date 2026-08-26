@@ -1221,7 +1221,7 @@
     </div>
     <div class="form-row">
       <div class="form-group"><label>Location</label><input type="text" id="rm-location" placeholder="Store location"></div>
-      <div class="form-group"><label>Supplier</label><input type="text" id="rm-supplier" list="rm-supplier-list" placeholder="Who we buy from"><datalist id="rm-supplier-list"></datalist></div>
+      <div class="form-group"><label>Supplier(s) <span style="font-size:11px;color:var(--text-muted)">(comma-separate for 2+)</span></label><input type="text" id="rm-supplier" list="rm-supplier-list" placeholder="Supplier A, Supplier B"><datalist id="rm-supplier-list"></datalist></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-rm')">Cancel</button>
@@ -2641,7 +2641,7 @@ function openRMModal(data=null) {
   document.getElementById('rm-qty').value=data?.quantity??0;
   document.getElementById('rm-min').value=data?.min_stock??0;
   document.getElementById('rm-location').value=data?.location||'';
-  document.getElementById('rm-supplier').value=data?.supplier||'';
+  document.getElementById('rm-supplier').value=matSuppliers(data||{}).join(', ');
   loadSuppliers().then(()=>{ document.getElementById('rm-supplier-list').innerHTML=allSuppliers.map(s=>`<option value="${s.name}">`).join(''); });
   openModal('modal-rm');
 }
@@ -2651,7 +2651,9 @@ async function saveRM() {
   const payload={ code:document.getElementById('rm-code').value, name:document.getElementById('rm-name').value,
     category:document.getElementById('rm-category').value, unit:document.getElementById('rm-unit').value,
     quantity:parseFloat(document.getElementById('rm-qty').value)||0, min_stock:parseFloat(document.getElementById('rm-min').value)||0,
-    location:document.getElementById('rm-location').value, supplier:document.getElementById('rm-supplier').value||null, updated_at:new Date().toISOString() };
+    location:document.getElementById('rm-location').value, updated_at:new Date().toISOString() };
+  const supList=document.getElementById('rm-supplier').value.split(',').map(s=>s.trim()).filter(Boolean);
+  payload.suppliers=supList; payload.supplier=supList[0]||null;
   const { error } = id ? await sb.from('raw_materials').update(payload).eq('id',id) : await sb.from('raw_materials').insert(payload);
   if (error) return toast('Save failed: '+error.message,'error');
   closeModal('modal-rm'); toast('Material saved'); loadRawMat();
@@ -2789,10 +2791,20 @@ async function renderSupList(){
 async function addSupplier(){ const name=document.getElementById('sup-new').value.trim(); if(!name)return; const row={name}; try{ if(crypto&&crypto.randomUUID) row.id=crypto.randomUUID(); }catch(e){} let {error}=await sb.from('suppliers').insert(row); if(error&&row.id){ const r=await sb.from('suppliers').insert({name}); error=r.error; } if(error)return toast('Add failed: '+error.message,'error'); document.getElementById('sup-new').value=''; renderSupList(); toast('Supplier added'); }
 async function deleteSupplier(id){ if(!confirm('Remove supplier?'))return; await sb.from('suppliers').delete().eq('id',id); renderSupList(); }
 function poSupplierOptions(sel){ return '<option value="">— Select supplier —</option>'+allSuppliers.map(s=>`<option value="${s.name}"${sel===s.name?' selected':''}>${s.name}</option>`).join(''); }
+// A material's supplier(s): the suppliers[] array if present, else the single supplier field
+function matSuppliers(m){ if(Array.isArray(m.suppliers)&&m.suppliers.length) return m.suppliers.filter(Boolean); return m.supplier?[m.supplier]:[]; }
 function rmOptions(sel,supplier){
   let list=allRawMat;
-  if(supplier){ const f=allRawMat.filter(m=>m.supplier===supplier); if(f.length) list=f; }
+  if(supplier){ const f=allRawMat.filter(m=>matSuppliers(m).includes(supplier)); if(f.length) list=f; }
   return '<option value="">— Select material —</option>'+list.map(m=>`<option value="${m.id}"${sel===m.id?' selected':''}>${m.code?m.code+' — ':''}${m.name}${m.unit?' ('+m.unit+')':''}</option>`).join('');
+}
+// When a material is picked and the order has no supplier yet, fill it from the item's supplier(s)
+function polPickSupplier(sel){
+  const m=allRawMat.find(x=>x.id===sel.value); if(!m) return;
+  const sup=document.getElementById('po-supplier'); if(!sup || sup.value) return;   // don't override an existing choice
+  const list=matSuppliers(m);
+  if(list.length===1){ sup.value=list[0]; }
+  else if(list.length>1){ toast('This item has '+list.length+' suppliers: '+list.join(', ')+' — pick one in Supplier'); sup.focus(); }
 }
 function addPOLine(rmId='',qty='',uom=''){
   const id='pol'+(poLineSeq++);
@@ -2800,7 +2812,7 @@ function addPOLine(rmId='',qty='',uom=''){
   const div=document.createElement('div'); div.className='po-line'; div.id=id;
   div.style.cssText='display:flex;gap:6px;margin-bottom:6px;align-items:center';
   const unit0=uom||(allRawMat.find(m=>m.id===rmId)||{}).unit||'';
-  div.innerHTML=`<select class="pol-rm" style="flex:1" onchange="polUpdateUnit(this)">${rmOptions(rmId,supplier)}</select>
+  div.innerHTML=`<select class="pol-rm" style="flex:1" onchange="polUpdateUnit(this);polPickSupplier(this)">${rmOptions(rmId,supplier)}</select>
     <input type="number" class="pol-qty" placeholder="Qty" step="0.01" min="0" value="${qty}" style="width:76px">
     <input type="text" class="pol-uom" placeholder="UOM" value="${(unit0||'').replace(/"/g,'&quot;')}" style="width:64px" title="Order UOM — type freely (kg / CTN / roll)">
     <button class="btn btn-danger btn-sm" onclick="this.closest('.po-line').remove()"><i class="ti ti-x"></i></button>`;
@@ -2811,7 +2823,7 @@ function polUpdateUnit(sel){ const m=allRawMat.find(x=>x.id===sel.value); const 
 // When supplier changes, auto-fill the items we normally buy from them
 function poSupplierChanged(){
   const supplier=document.getElementById('po-supplier').value;
-  const mats=supplier?allRawMat.filter(m=>m.supplier===supplier):[];
+  const mats=supplier?allRawMat.filter(m=>matSuppliers(m).includes(supplier)):[];
   document.getElementById('po-lines').innerHTML=''; poLineSeq=0;
   if(mats.length){ mats.forEach(m=>addPOLine(m.id,'')); }
   else { addPOLine(); }
