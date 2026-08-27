@@ -1431,9 +1431,15 @@
         <input type="text" id="tx-ref" placeholder="DO-001 / PO-001">
       </div>
     </div>
-    <div class="form-group">
-      <label>Reason / Notes</label>
-      <input type="text" id="tx-reason" placeholder="Purchase / Production issue…">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Date <span style="font-size:11px;color:var(--text-muted)">(can backdate)</span></label>
+        <input type="date" id="tx-date">
+      </div>
+      <div class="form-group">
+        <label>Reason / Notes</label>
+        <input type="text" id="tx-reason" placeholder="Purchase / Production issue…">
+      </div>
     </div>
     <div style="margin:12px 0 6px;font-size:13px;font-weight:600;color:var(--text-muted)">Items</div>
     <div id="tx-lines"></div>
@@ -2288,6 +2294,7 @@ async function openTxModal() {
   toggleTxSource();
   document.getElementById('tx-ref').value='';
   document.getElementById('tx-reason').value='';
+  document.getElementById('tx-date').value=new Date().toISOString().slice(0,10);
   document.getElementById('tx-lines').innerHTML='';
   txLineCount=0;
   addTxLine();
@@ -2379,6 +2386,7 @@ async function editTx(id) {
   toggleTxSource();
   document.getElementById('tx-ref').value = tx.reference_no||'';
   document.getElementById('tx-reason').value = tx.reason||'';
+  document.getElementById('tx-date').value = (tx.created_at||'').slice(0,10) || new Date().toISOString().slice(0,10);
   document.getElementById('tx-lines').innerHTML='';
   txLineCount=0;
   addTxLine(tx.inventory_id||tx.item_id||'', tx.quantity);
@@ -2422,6 +2430,8 @@ async function _saveTransactionInner() {
   const source = type==='in' ? document.getElementById('tx-source').value : null;
   const ref = document.getElementById('tx-ref').value;
   const reason = document.getElementById('tx-reason').value;
+  const txDate = document.getElementById('tx-date').value;
+  const createdAt = txDate ? new Date(txDate+'T'+new Date().toTimeString().slice(0,8)).toISOString() : new Date().toISOString();
   if (txId) {
     // Single-line edit mode
     const lineEl = document.getElementById('tx-line-0') || document.querySelector('.tx-line');
@@ -2443,7 +2453,7 @@ async function _saveTransactionInner() {
     const { data: item } = await sb.from('inventory').select('quantity').eq('id',itemId).single();
     const newQty = type==='in' ? item.quantity+qty : item.quantity-qty;
     if (newQty<0) return toast('Insufficient stock!','error');
-    const { error } = await sb.from('stock_transactions').update({type,source,quantity:qty,reference_no:ref,reason,item_id:itemId}).eq('id',txId);
+    const { error } = await sb.from('stock_transactions').update({type,source,quantity:qty,reference_no:ref,reason,item_id:itemId,created_at:createdAt}).eq('id',txId);
     if (error) return toast('Save failed: '+error.message,'error');
     await sb.from('inventory').update({quantity:newQty,updated_at:new Date().toISOString()}).eq('id',itemId);
     closeModal('modal-tx'); toast('Transaction updated'); loadTransactions(); renderProductionChart();
@@ -2468,7 +2478,7 @@ async function _saveTransactionInner() {
     for (const l of lines) {
       const { data: item } = await sb.from('inventory').select('quantity').eq('id',l.itemId).single();
       const newQty = type==='in' ? item.quantity+l.qty : item.quantity-l.qty;
-      await sb.from('stock_transactions').insert({item_id:l.itemId,type,source,quantity:l.qty,reference_no:ref,reason,created_by:currentUser.id});
+      await sb.from('stock_transactions').insert({item_id:l.itemId,type,source,quantity:l.qty,reference_no:ref,reason,created_by:currentUser.id,created_at:createdAt});
       await sb.from('inventory').update({quantity:newQty,updated_at:new Date().toISOString()}).eq('id',l.itemId);
     }
     closeModal('modal-tx');
