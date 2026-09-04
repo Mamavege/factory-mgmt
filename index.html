@@ -1272,8 +1272,8 @@
 <div class="modal-overlay" id="modal-access">
   <div class="modal">
     <h2>Page Access</h2>
-    <p style="font-size:13px;color:var(--text-muted);margin:-6px 0 10px">Tick the pages <strong id="access-name"></strong> can see. Unticked pages are hidden from their menu.</p>
-    <div id="access-list" style="max-height:320px;overflow:auto;border:1.5px solid var(--border);border-radius:8px;padding:6px"></div>
+    <p style="font-size:13px;color:var(--text-muted);margin:-6px 0 10px">For <strong id="access-name"></strong>: tick <b>See</b> to show a page in their menu, and <b>Edit</b> to let them add/edit/delete on that page.</p>
+    <div id="access-list" style="max-height:340px;overflow:auto;border:1.5px solid var(--border);border-radius:8px;padding:6px"></div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-access')">Cancel</button>
       <button class="btn btn-primary" style="width:auto" onclick="saveAccess()">Save</button>
@@ -1828,8 +1828,13 @@ async function handleLogout() {
 }
 
 let appInitialized = false;
+// A recovery link carries type=recovery in the URL hash or query (implicit flow)
+function isRecoveryUrl(){
+  const h=window.location.hash||'', q=window.location.search||'';
+  return /type=recovery/.test(h) || /type=recovery/.test(q);
+}
 sb.auth.onAuthStateChange(async (event, session) => {
-  if (event === 'PASSWORD_RECOVERY') {
+  if (event === 'PASSWORD_RECOVERY' || (session?.user && isRecoveryUrl())) {
     // Arrived from a reset email — show the set-new-password form, don't open the app
     recoveryMode = true;
     document.getElementById('app').style.display = 'none';
@@ -1858,6 +1863,9 @@ sb.auth.onAuthStateChange(async (event, session) => {
     initApp();
   }
 });
+
+// If we arrived via a recovery link, show the Set-New-Password form right away
+if (isRecoveryUrl()) { recoveryMode = true; try{ showResetForm(); }catch(e){} }
 
 // Clear any legacy stale Supabase keys from previous versions
 Object.keys(localStorage).filter(k => k.startsWith('sb-') || k === 'supabase.auth.token' || k === 'factoryos-auth').forEach(k => localStorage.removeItem(k));
@@ -1896,6 +1904,12 @@ function allowedPagesFor(profile){
   const ap = profile.allowed_pages;
   if (!ap || (Array.isArray(ap) && ap.length===0)) return null; // not restricted yet → all
   return Array.isArray(ap) ? ap : null;
+}
+// Can the current user edit a given module? Admins always; others need the page in edit_pages.
+function canEdit(page){
+  if (currentProfile?.role==='admin') return true;
+  const ep = currentProfile?.edit_pages;
+  return Array.isArray(ep) && ep.includes(page);
 }
 function applyPagePermissions(){
   const allow = allowedPagesFor(currentProfile);
@@ -2821,7 +2835,7 @@ function addTransportLine(carrier='jywl', no=''){
   document.getElementById('po-ships').appendChild(div);
 }
 function renderPOs(data) {
-  const isAdmin=currentProfile?.role==='admin';
+  const isAdmin=canEdit('purchasing');
   document.getElementById('po-tbody').innerHTML = data.length ? data.map(p=>{
     // next milestone eta for display
     const nextEta = p.stage==='received' ? (p.delivered_date||'') : (p.eta_hq||p.eta||p.etd||p.delivered_date||'');
@@ -3698,18 +3712,24 @@ const ACCESS_PAGES = [
 let accessUserId = null;
 async function openAccessModal(id){
   accessUserId = id;
-  const { data: p } = await sb.from('profiles').select('name,allowed_pages').eq('id',id).single();
-  const allow = (Array.isArray(p?.allowed_pages)&&p.allowed_pages.length) ? p.allowed_pages : ACCESS_PAGES.map(x=>x[0]); // default all ticked
+  const { data: p } = await sb.from('profiles').select('name,allowed_pages,edit_pages').eq('id',id).single();
+  const allow = (Array.isArray(p?.allowed_pages)&&p.allowed_pages.length) ? p.allowed_pages : ACCESS_PAGES.map(x=>x[0]); // default all visible
+  const edit = Array.isArray(p?.edit_pages) ? p.edit_pages : [];
   document.getElementById('access-name').textContent = p?.name || '';
-  document.getElementById('access-list').innerHTML = ACCESS_PAGES.map(([k,lbl])=>`
-    <label style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px">
-      <input type="checkbox" class="access-cb" value="${k}" style="width:16px;height:16px;margin:0"${allow.includes(k)?' checked':''}> ${lbl}
-    </label>`).join('');
+  document.getElementById('access-list').innerHTML =
+    `<div style="display:flex;font-size:11px;color:var(--text-muted);font-weight:600;padding:2px 4px 6px"><span style="flex:1"></span><span style="width:44px;text-align:center">See</span><span style="width:44px;text-align:center">Edit</span></div>`+
+    ACCESS_PAGES.map(([k,lbl])=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--border);font-size:13px">
+      <span style="flex:1">${lbl}</span>
+      <span style="width:44px;text-align:center"><input type="checkbox" class="access-see" value="${k}" style="width:16px;height:16px;margin:0"${allow.includes(k)?' checked':''}></span>
+      <span style="width:44px;text-align:center"><input type="checkbox" class="access-edit" value="${k}" style="width:16px;height:16px;margin:0"${edit.includes(k)?' checked':''}></span>
+    </div>`).join('');
   openModal('modal-access');
 }
 async function saveAccess(){
-  const pages = [...document.querySelectorAll('.access-cb:checked')].map(cb=>cb.value);
-  const { error } = await sb.from('profiles').update({allowed_pages:pages}).eq('id',accessUserId);
+  const pages = [...document.querySelectorAll('.access-see:checked')].map(cb=>cb.value);
+  const edits = [...document.querySelectorAll('.access-edit:checked')].map(cb=>cb.value);
+  const { error } = await sb.from('profiles').update({allowed_pages:pages, edit_pages:edits}).eq('id',accessUserId);
   if (error) return toast('Save failed: '+error.message,'error');
   closeModal('modal-access'); toast('Access updated'); loadEmployees();
 }
