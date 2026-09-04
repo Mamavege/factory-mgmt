@@ -1828,8 +1828,13 @@ async function handleLogout() {
 }
 
 let appInitialized = false;
+// A recovery link carries type=recovery in the URL hash or query (implicit flow)
+function isRecoveryUrl(){
+  const h=window.location.hash||'', q=window.location.search||'';
+  return /type=recovery/.test(h) || /type=recovery/.test(q);
+}
 sb.auth.onAuthStateChange(async (event, session) => {
-  if (event === 'PASSWORD_RECOVERY') {
+  if (event === 'PASSWORD_RECOVERY' || (session?.user && isRecoveryUrl())) {
     // Arrived from a reset email — show the set-new-password form, don't open the app
     recoveryMode = true;
     document.getElementById('app').style.display = 'none';
@@ -1858,6 +1863,9 @@ sb.auth.onAuthStateChange(async (event, session) => {
     initApp();
   }
 });
+
+// If we arrived via a recovery link, show the Set-New-Password form right away
+if (isRecoveryUrl()) { recoveryMode = true; try{ showResetForm(); }catch(e){} }
 
 // Clear any legacy stale Supabase keys from previous versions
 Object.keys(localStorage).filter(k => k.startsWith('sb-') || k === 'supabase.auth.token' || k === 'factoryos-auth').forEach(k => localStorage.removeItem(k));
