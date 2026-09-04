@@ -3026,6 +3026,12 @@ async function saveTrack(){
   const p=allPOs.find(x=>x.id===id); if(!p) return;
   const payload={ stage:document.getElementById('track-stage').value };
   (TRACK_DATES[p.type||'local']).forEach(([k])=>{ const el=document.getElementById('td-'+k); if(el) payload[k]=el.value||null; });
+  // Auto-advance the stage to the furthest one whose date has been filled
+  const stages=PO_STAGES[p.type||'local'];
+  let derivedIdx=-1;
+  stages.forEach((s,i)=>{ const df=STAGE_DATE_FIELD[s]; if(df && payload[df]) derivedIdx=Math.max(derivedIdx,i); });
+  const chosenIdx=stages.indexOf(payload.stage);
+  if(derivedIdx>chosenIdx) payload.stage=stages[derivedIdx];   // dates say we're further along → advance
   const { error }=await sb.from('purchase_orders').update(payload).eq('id',id);
   if(error) return toast('Save failed: '+error.message,'error');
   closeModal('modal-track'); toast('Progress updated'); loadPurchasing();
