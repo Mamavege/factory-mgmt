@@ -402,6 +402,21 @@
         <i class="ti ti-user-plus"></i> Create Account
       </button>
     </div>
+
+    <div id="reset-form" style="display:none">
+      <div class="form-group">
+        <label>New Password (min. 6 characters)</label>
+        <input type="password" id="reset-password" placeholder="••••••••" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label>Confirm New Password</label>
+        <input type="password" id="reset-password2" placeholder="••••••••" autocomplete="new-password"
+               onkeydown="if(event.key==='Enter')handleSetNewPassword()">
+      </div>
+      <button class="btn btn-primary" onclick="handleSetNewPassword()" id="btn-reset">
+        <i class="ti ti-lock"></i> Set New Password
+      </button>
+    </div>
   </div>
 </div>
 
@@ -1692,6 +1707,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 let currentUser = null;
 let currentProfile = null;
+let recoveryMode = false;
 let allWorkOrders = [], allInventory = [], allTransactions = [], allEquipment = [], allMaintenance = [];
 
 // ─── AUTH ────────────────────────────────────────────
@@ -1714,6 +1730,32 @@ function hideAuthMsg() {
   document.getElementById('auth-msg').style.display = 'none';
 }
 
+function showResetForm() {
+  document.getElementById('login-form').style.display = 'none';
+  document.getElementById('register-form').style.display = 'none';
+  document.getElementById('reset-form').style.display = 'block';
+  document.querySelectorAll('.auth-tab').forEach(t=>t.style.display='none');
+  showAuthMsg('Enter a new password for your account.', 'success');
+}
+async function handleSetNewPassword() {
+  const p1 = document.getElementById('reset-password').value;
+  const p2 = document.getElementById('reset-password2').value;
+  if (!p1 || p1.length < 6) return showAuthMsg('Password must be at least 6 characters.');
+  if (p1 !== p2) return showAuthMsg('Passwords do not match.');
+  const btn = document.getElementById('btn-reset');
+  btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.7s linear infinite"></i> Saving…';
+  const { error } = await sb.auth.updateUser({ password: p1 });
+  btn.disabled = false; btn.innerHTML = '<i class="ti ti-lock"></i> Set New Password';
+  if (error) return showAuthMsg(error.message);
+  await sb.auth.signOut();
+  // Clean the recovery token out of the URL, then show login
+  history.replaceState(null, '', window.location.pathname);
+  document.getElementById('reset-form').style.display = 'none';
+  document.getElementById('login-form').style.display = 'block';
+  document.querySelectorAll('.auth-tab').forEach(t=>t.style.display='');
+  switchAuthTab('login');
+  showAuthMsg('Password updated. Please sign in with your new password.', 'success');
+}
 async function handleForgotPassword() {
   const email = document.getElementById('login-email').value.trim();
   if (!email) return showAuthMsg('Enter your email above first, then click "Forgot password?"');
@@ -1787,6 +1829,15 @@ async function handleLogout() {
 
 let appInitialized = false;
 sb.auth.onAuthStateChange(async (event, session) => {
+  if (event === 'PASSWORD_RECOVERY') {
+    // Arrived from a reset email — show the set-new-password form, don't open the app
+    recoveryMode = true;
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('auth-screen').style.display = 'flex';
+    showResetForm();
+    return;
+  }
+  if (event === 'SIGNED_OUT') { recoveryMode = false; }
   if (event === 'SIGNED_OUT') {
     appInitialized = false;
     currentUser = null;
@@ -1796,6 +1847,7 @@ sb.auth.onAuthStateChange(async (event, session) => {
     return;
   }
   if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+    if (recoveryMode) return; // in the middle of a password reset — keep the reset form
     if (appInitialized) return; // prevent duplicate init
     appInitialized = true;
     currentUser = session.user;
