@@ -2800,7 +2800,7 @@ async function loadPurchasing() {
 }
 function filterPOs() {
   const q=document.getElementById('po-search').value.toLowerCase(), s=document.getElementById('po-status-filter').value;
-  renderPOs(allPOs.filter(p=>(!q||p.po_no?.toLowerCase().includes(q)||p.supplier?.toLowerCase().includes(q)||poItemsText(p).toLowerCase().includes(q))&&(!s||p.stage===s)));
+  renderPOs(allPOs.filter(p=>(!q||p.po_no?.toLowerCase().includes(q)||p.supplier?.toLowerCase().includes(q)||poItemsText(p).toLowerCase().includes(q))&&(!s||effectiveStage(p)===s)));
 }
 // Comma-separated item names (+ qty) for an order
 function poItemsText(p){ const its=p.items||[]; return its.map(it=>{ const m=allRawMat.find(x=>x.id===it.rm_id); const nm=it.rm_name||m?.name||it.rm_id||''; const u=(it.uom||m?.unit)?(' '+(it.uom||m.unit)):''; return nm+(it.qty_ordered?(' ×'+it.qty_ordered+u):''); }).join(', '); }
@@ -2845,8 +2845,9 @@ function addTransportLine(carrier='jywl', no=''){
 function renderPOs(data) {
   const isAdmin=canEdit('purchasing');
   document.getElementById('po-tbody').innerHTML = data.length ? data.map(p=>{
+    const es = effectiveStage(p);
     // next milestone eta for display
-    const nextEta = p.stage==='received' ? (p.delivered_date||'') : (p.eta_hq||p.eta||p.etd||p.delivered_date||'');
+    const nextEta = es==='received' ? (p.delivered_date||'') : (p.eta_hq||p.eta||p.etd||p.delivered_date||'');
     const lead = daysBetween(p.req_date, p.delivered_date);
     const ships = poShipments(p);
     const shipLinks = ships.map(s=>{
@@ -2863,7 +2864,7 @@ function renderPOs(data) {
       <td><strong>${p.po_no||'—'}</strong>${shipLinks?`<br>${shipLinks}`:''}</td><td>${p.supplier||'—'}</td>
       <td style="max-width:240px;font-size:12px;white-space:normal">${poItemsText(p)||'—'}</td>
       <td>${p.type==='import'?'🚢 Import':'Local'}</td>
-      <td>${poStageBadge(p.stage||'requested')}</td>
+      <td>${poStageBadge(es)}</td>
       <td>${p.req_date||'—'}</td>
       <td>${nextEta||'—'}</td>
       <td>${lead!=null?lead+' days':'—'}</td>
@@ -2983,11 +2984,24 @@ async function savePO(){
 async function deletePO(id){ if(!confirm('Delete this order?'))return; await sb.from('po_items').delete().eq('po_id',id); await sb.from('purchase_orders').delete().eq('id',id); toast('Deleted'); loadPurchasing(); }
 // Timeline / progress stepper
 const STAGE_DATE_FIELD = { requested:'req_date', ordered:'order_date', paid:'payment_date', china_wh:null, shipped:'etd', arrived_port:'eta', customs:'customs_date', delivered_hq:'eta_hq', delivered:'delivered_date', received:'delivered_date' };
+// Effective stage = walk forward through consecutively-filled dates; stop at the first gap.
+// (Later dates are often estimates, so we never skip past an empty step.) A manual stored stage still wins if further.
+function effectiveStage(p){
+  const stages=PO_STAGES[p.type||'local'];
+  let idx=0;
+  for(let i=1;i<stages.length;i++){
+    const df=STAGE_DATE_FIELD[stages[i]];
+    if(df===null){ idx=i; continue; }     // stage with no date field (e.g. China WH) — pass through
+    if(p[df]) idx=i; else break;           // date filled → advance; empty → stop
+  }
+  const storedIdx=stages.indexOf(p.stage||'requested');
+  return stages[Math.max(idx, storedIdx>=0?storedIdx:0)];
+}
 function openPOTimeline(id){
   const p=allPOs.find(x=>x.id===id); if(!p) return;
   document.getElementById('potl-title').textContent='Timeline — '+(p.po_no||'')+(p.supplier?(' · '+p.supplier):'');
   const stages=PO_STAGES[p.type||'local'];
-  const curIdx=Math.max(0, stages.indexOf(p.stage||'requested'));
+  const curIdx=Math.max(0, stages.indexOf(effectiveStage(p)));
   const rows=stages.map((s,i)=>{
     const done=i<curIdx, current=i===curIdx;
     const df=STAGE_DATE_FIELD[s]; const dateVal=df?p[df]:'';
