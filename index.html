@@ -2153,8 +2153,9 @@ async function recalcInventory() {
   loadInventory();
 }
 async function loadInventory() {
+  const isAdmin = currentProfile?.role==='admin';
   const { data } = await sb.from('inventory').select('*').order('item_name');
-  allInventory = data || [];
+  allInventory = (data || []).filter(i => isAdmin || !i.hidden);   // non-admins never see hidden items
   const cats = [...new Set(data.map(i=>i.category).filter(Boolean))];
   const catOpts = cats.map(c=>`<option value="${c}">${c}</option>`).join('');
   document.getElementById('inv-cat-filter').innerHTML = '<option value="">All Categories</option>' + catOpts;
@@ -2172,8 +2173,8 @@ function renderInventory(data) {
     const reserved = i.reserved_qty||0;
     const available = i.quantity - reserved;
     const cartons = i.carton_size ? Math.floor(i.quantity/i.carton_size) : '—';
-    return `<tr>
-    <td class="c-code"><strong>${i.item_code}</strong></td><td class="c-short">${i.short_code||'—'}</td><td class="c-name">${i.item_name}</td><td class="c-category">${i.category||'—'}</td>
+    return `<tr${i.hidden?' style="opacity:.5"':''}>
+    <td class="c-code"><strong>${i.item_code}</strong>${i.hidden?' <span class="badge badge-gray" style="font-size:9px">hidden</span>':''}</td><td class="c-short">${i.short_code||'—'}</td><td class="c-name">${i.item_name}</td><td class="c-category">${i.category||'—'}</td>
     <td class="c-total"><span class="${i.quantity<=i.min_stock?'badge badge-danger':'badge badge-success'}">${i.quantity}</span></td>
     <td class="c-reserved">${reserved>0?`<span class="badge badge-warning">${reserved}</span>`:'—'}</td>
     <td class="c-available"><span class="${available<=0?'badge badge-danger':'badge badge-success'}">${available}</span></td>
@@ -2183,6 +2184,7 @@ function renderInventory(data) {
     <td class="c-actions">
       ${isAdmin?`<button class="btn btn-secondary btn-sm" onclick="editInv('${i.id}')"><i class="ti ti-edit"></i></button>
       <button class="btn btn-sm" style="background:var(--warning);color:#fff" onclick="openReserveModal('${i.id}')"><i class="ti ti-lock"></i></button>
+      <button class="btn btn-secondary btn-sm" onclick="toggleHideInv('${i.id}',${i.hidden?1:0})" title="${i.hidden?'Show to staff':'Hide from staff'}"><i class="ti ti-eye${i.hidden?'-off':''}"></i></button>
       <button class="btn btn-danger btn-sm" onclick="deleteInv('${i.id}')"><i class="ti ti-trash"></i></button>`:'—'}
     </td>
   </tr>`;}).join('') : '<tr><td colspan="14"><div class="empty-state"><i class="ti ti-box"></i><p>No inventory items</p></div></td></tr>';
@@ -2236,6 +2238,12 @@ async function saveInventory() {
   const { error } = id ? await sb.from('inventory').update(payload).eq('id',id) : await sb.from('inventory').insert(payload);
   if (error) return toast('Save failed: '+error.message,'error');
   closeModal('modal-inv'); toast('Item saved'); loadInventory();
+}
+async function toggleHideInv(id, isHidden) {
+  if (currentProfile?.role!=='admin') return toast('Admin only','error');
+  const { error } = await sb.from('inventory').update({hidden: !isHidden}).eq('id',id);
+  if (error) return toast('Failed: '+error.message,'error');
+  toast(isHidden?'Item is now visible to staff':'Item hidden from staff'); loadInventory();
 }
 async function deleteInv(id) {
   if (!confirm('Delete this item?')) return;
