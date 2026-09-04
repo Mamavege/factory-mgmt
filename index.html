@@ -379,6 +379,9 @@
       <button class="btn btn-primary" onclick="handleLogin()" id="btn-login">
         <i class="ti ti-login"></i> Sign In
       </button>
+      <div style="text-align:center;margin-top:12px">
+        <a href="#" onclick="handleForgotPassword();return false" style="font-size:13px;color:var(--accent)">Forgot password?</a>
+      </div>
     </div>
 
     <div id="register-form" style="display:none">
@@ -1711,6 +1714,13 @@ function hideAuthMsg() {
   document.getElementById('auth-msg').style.display = 'none';
 }
 
+async function handleForgotPassword() {
+  const email = document.getElementById('login-email').value.trim();
+  if (!email) return showAuthMsg('Enter your email above first, then click "Forgot password?"');
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname });
+  if (error) return showAuthMsg(error.message);
+  showAuthMsg('Reset link sent to '+email+'. Check your inbox (and spam).', 'success');
+}
 async function handleLogin() {
   const email = document.getElementById('login-email').value.trim();
   const pass = document.getElementById('login-password').value;
