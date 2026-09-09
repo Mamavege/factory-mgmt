@@ -4552,6 +4552,20 @@ async function costingSavePurchaseRecord() {
 
   const unit_price = totalPrice / qty;
 
+  // Price change alert (new records only, skip edits)
+  if (!editId) {
+    const matName = document.getElementById('cp-material-search').value.trim();
+    const prevPrice = costingEffectivePrices[matName]?.price;
+    if (prevPrice > 0 && Math.abs(unit_price - prevPrice) > 0.0001) {
+      const diff = unit_price - prevPrice;
+      const pct = ((diff / prevPrice) * 100).toFixed(1);
+      const sign = diff > 0 ? '+' : '';
+      const uom = document.getElementById('cp-uom').value || '';
+      const msg = `⚠️ Price change detected for "${matName}":\n\nPrevious: RM ${prevPrice.toFixed(4)}/${uom}\nNew: RM ${unit_price.toFixed(4)}/${uom} (${sign}${pct}%)\n\nConfirm to save, or Cancel to go back and check.`;
+      if (!confirm(msg)) return;
+    }
+  }
+
   if (editId) {
     const { data, error } = await sb.from('costing_purchase_records').update({
       material_id, supplier, qty_purchased: qty, unit_price, category: _cpCurrentCategory
