@@ -4057,7 +4057,7 @@ function costingRenderPurchaseRecords() {
     const cat = r.category ?? r.costing_materials?.category ?? '';
     const catColor = cat==='packaging'?'#2563eb':cat==='transport'?'#dc2626':cat==='cooking_gas'?'#16a34a':'var(--text)';
     const itemCode = r.costing_materials?.item_code ?? '';
-    return `<tr style="border-top:1px solid var(--border)">
+    return `<tr style="border-top:1px solid var(--border)" data-category="${cat}">
     <td style="padding:6px 10px;color:var(--text-muted);font-size:11px">${itemCode}</td>
     <td style="padding:6px 10px;font-weight:600;color:${catColor}">${r.costing_materials?.name ?? r.material_name ?? '—'}</td>
     <td style="padding:6px 10px;color:var(--text-muted)">${r.supplier||'—'}</td>
@@ -4071,10 +4071,17 @@ function costingRenderPurchaseRecords() {
     </td>
   </tr>`;}).join('');
   el.innerHTML = `
-    <div style="padding:6px 0 8px">
+    <div style="padding:6px 0 8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <input id="cp-records-search" type="text" placeholder="🔍  Search material, item code, supplier…"
-        class="costing-input" style="width:100%;font-size:12px;padding:6px 10px"
-        oninput="costingFilterPurchaseRecords(this.value)">
+        class="costing-input" style="flex:1;min-width:180px;font-size:12px;padding:6px 10px"
+        oninput="costingFilterPurchaseRecords()">
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        <button id="cpf-all" class="btn btn-primary btn-sm" style="font-size:11px;padding:4px 10px" onclick="costingSetCatFilter('')">All</button>
+        <button id="cpf-raw" class="btn btn-secondary btn-sm" style="font-size:11px;padding:4px 10px" onclick="costingSetCatFilter('raw_material')">Raw Mat</button>
+        <button id="cpf-pkg" class="btn btn-secondary btn-sm" style="font-size:11px;padding:4px 10px" onclick="costingSetCatFilter('packaging')">Packaging</button>
+        <button id="cpf-gas" class="btn btn-secondary btn-sm" style="font-size:11px;padding:4px 10px" onclick="costingSetCatFilter('cooking_gas')">Utility</button>
+        <button id="cpf-tr"  class="btn btn-secondary btn-sm" style="font-size:11px;padding:4px 10px" onclick="costingSetCatFilter('transport')">Transport</button>
+      </div>
     </div>
     <div style="max-height:220px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:12px" id="cp-records-table">
     <thead style="position:sticky;top:0;z-index:1;background:var(--bg)"><tr>
@@ -4089,13 +4096,29 @@ function costingRenderPurchaseRecords() {
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-function costingFilterPurchaseRecords(q) {
+let _cpCatFilter = '';
+
+function costingSetCatFilter(cat) {
+  _cpCatFilter = cat;
+  ['all','raw','pkg','gas','tr'].forEach(k => {
+    const map = {all:'',raw:'raw_material',pkg:'packaging',gas:'cooking_gas',tr:'transport'};
+    const el = document.getElementById(`cpf-${k}`);
+    if (el) el.className = map[k] === cat ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
+    if (el) el.style.fontSize = '11px', el.style.padding = '4px 10px';
+  });
+  costingFilterPurchaseRecords();
+}
+
+function costingFilterPurchaseRecords() {
   const tbody = document.querySelector('#cp-records-table tbody');
   if (!tbody) return;
-  const term = q.trim().toLowerCase();
+  const term = (document.getElementById('cp-records-search')?.value || '').trim().toLowerCase();
   tbody.querySelectorAll('tr').forEach(tr => {
     const text = tr.textContent.toLowerCase();
-    tr.style.display = (!term || text.includes(term)) ? '' : 'none';
+    const cat = tr.dataset.category || '';
+    const matchSearch = !term || text.includes(term);
+    const matchCat = !_cpCatFilter || cat === _cpCatFilter;
+    tr.style.display = matchSearch && matchCat ? '' : 'none';
   });
 }
 
