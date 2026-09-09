@@ -4906,7 +4906,7 @@ function costingOpenProduct(type, code) {
       let sfTrRows = '';
       if (sfTrBom.length) {
         sfTrBom.forEach(b => {
-          const ep = costingEffectivePrices[b.material_name] || { price: 0, sourceLabel: 'No price data' };
+          const ep = costingTransportPrices[b.material_name] || { price: 0, sourceLabel: 'No price data — enter purchase record' };
           const cpu = (Number(b.qty_per_pot)||0) * ep.price;
           sfTrRows += tRow(b.material_name, cpu, `${b.qty_per_pot} ${b.uom}/unit, RM ${ep.price.toFixed(4)}/${b.uom}`);
         });
