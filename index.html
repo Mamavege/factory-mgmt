@@ -3213,6 +3213,11 @@ function renderWipStations() {
     const showYield = st.id === 'preparing';         // only preparing tracks kg input/yield/wastage
     const hasBatch  = st.id === 'cooking' || st.id === 'filling' || st.id === 'packing';
     const unit = WIP_UNITS[st.id] || 'kg';
+    // Cooking output is keyed in grams; show the column in gm but totals converted to kg
+    const gramEntry = st.id === 'cooking';
+    const rowUnit = gramEntry ? 'gm' : unit;
+    const sumUnit = gramEntry ? 'kg' : unit;
+    const toSum = v => gramEntry ? v/1000 : v;   // grams → kg for summaries
     const fillInfo = st.id === 'filling' ? fillingBatchInfo() : null;   // semi balance left per batch
     const totalInput  = entries.reduce((s,e)=>s+(parseFloat(e.input_kg)||0),0);
     const totalOutput = entries.reduce((s,e)=>s+(parseFloat(e.output_kg)||0),0);
@@ -3221,16 +3226,16 @@ function renderWipStations() {
     const yieldRate   = totalInput>0 ? (totalOutput/totalInput*100).toFixed(1)+'%' : '—';
     const batchesToday = new Set(entries.map(e=>e.batch_no).filter(Boolean)).size;
     const manHours    = entries.reduce((s,e)=>s+((parseFloat(e.headcount)||0)*((parseFloat(e.duration_min)||0)/60)),0);
-    const laborEff    = manHours>0 ? (totalOutput/manHours).toFixed(1) : '—';
+    const laborEff    = manHours>0 ? (toSum(totalOutput)/manHours).toFixed(1) : '—';
     const tile = (v,l,c)=>`<div style="text-align:center"><div style="font-size:16px;font-weight:800;color:${c}">${v}</div><div style="font-size:10px;color:var(--text-muted)">${l}</div></div>`;
     const tiles = [];
     if (showYield) tiles.push(tile(totalInput.toFixed(1),'Input (kg)','var(--text)'));
-    tiles.push(tile(totalOutput.toFixed(1),`Output (${unit})`,st.color));
+    tiles.push(tile(toSum(totalOutput).toFixed(1),`Output (${sumUnit})`,st.color));
     if (showYield) tiles.push(tile(yieldRate,'Yield','var(--success)'));
     if (hasBatch) tiles.push(tile(batchesToday,'Batches','var(--info)'));
     if (showYield) tiles.push(tile(totalWaste.toFixed(1),'Wastage (kg)','var(--warning)'));
     tiles.push(tile(totalReject.toFixed(1),'Reject (kg)','var(--danger)'));
-    tiles.push(tile(laborEff,`Eff (${unit}/mh)`,'var(--info)'));
+    tiles.push(tile(laborEff,`Eff (${sumUnit}/mh)`,'var(--info)'));
     const th = (t,a='right')=>`<th style="padding:7px 12px;font-size:11px;text-align:${a}">${t}</th>`;
     const td = (v,extra='')=>`<td style="padding:7px 12px;font-size:12px;text-align:right;${extra}">${v}</td>`;
     return `<div class="card">
@@ -3257,7 +3262,7 @@ function renderWipStations() {
           ${th('Product','left')}
           ${hasBatch?th('Batch','left'):''}
           ${showYield?th('Input'):''}
-          ${th(`Output (${unit})`)}
+          ${th(`Output (${rowUnit})`)}
           ${st.id==='filling'?th('Semi Bal'):''}
           ${showYield?th('Yield'):''}
           ${showYield?th('Waste'):''}
@@ -3383,8 +3388,8 @@ function openWipModal(station, data=null) {
   document.getElementById('wip-row-input').style.display = showYield ? '' : 'none';
   document.getElementById('wip-wastage-group').style.display = showYield ? '' : 'none';
 
-  // Output / Reject unit label per station (filling = pack)
-  const unit = WIP_UNITS[station] || 'kg';
+  // Output / Reject unit label per station (filling = pack; cooking is keyed in grams)
+  const unit = station==='cooking' ? 'gm' : (WIP_UNITS[station] || 'kg');
   // Preparing: output is auto (input − wastage − reject), so lock the field
   const outEl = document.getElementById('wip-output');
   if (station === 'preparing') { outEl.readOnly = true; outEl.style.opacity = '0.7'; document.getElementById('wip-output-label').textContent = `Output (${unit}, auto)`; }
