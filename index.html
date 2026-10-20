@@ -653,8 +653,8 @@
           <select class="filter-select" id="tx-category-filter" onchange="filterTransactions()">
             <option value="">All Categories</option>
           </select>
-          <input type="date" class="filter-select" id="tx-date-from" onchange="filterTransactions()" title="From date">
-          <input type="date" class="filter-select" id="tx-date-to" onchange="filterTransactions()" title="To date">
+          <input type="date" class="filter-select" id="tx-date-from" onchange="reloadTransactions()" title="From date">
+          <input type="date" class="filter-select" id="tx-date-to" onchange="reloadTransactions()" title="To date">
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap;cursor:pointer"><input type="checkbox" id="tx-show-deleted" checked onchange="filterTransactions()"> Show Deleted</label>
           <button class="btn btn-secondary" onclick="exportTransactionsCSV()" style="white-space:nowrap"><i class="ti ti-download"></i> Export CSV</button>
         </div>
@@ -2313,10 +2313,26 @@ async function saveReserve() {
 
 // ─── TRANSACTIONS ────────────────────────────────────
 async function loadTransactions() {
-  const { data } = await sb.from('stock_transactions').select('*, item:inventory!item_id(item_name,item_code,unit), creator:profiles!created_by(name)').order('created_at',{ascending:false}).limit(500);
-  allTransactions = data || [];
+  await fetchTransactions();
   filterTransactions();
 }
+// Fetch from DB. With no date filter → latest 500. With a date range → that whole range (older months included).
+async function fetchTransactions() {
+  const from = document.getElementById('tx-date-from')?.value || '';
+  const to   = document.getElementById('tx-date-to')?.value || '';
+  let query = sb.from('stock_transactions').select('*, item:inventory!item_id(item_name,item_code,unit), creator:profiles!created_by(name)').order('created_at',{ascending:false});
+  if (from || to) {
+    if (from) query = query.gte('created_at', from+'T00:00:00');
+    if (to)   query = query.lte('created_at', to+'T23:59:59');
+    query = query.limit(5000);
+  } else {
+    query = query.limit(500);
+  }
+  const { data } = await query;
+  allTransactions = data || [];
+}
+// Re-fetch when the date range changes, then apply the other filters
+async function reloadTransactions() { await fetchTransactions(); filterTransactions(); }
 function getFilteredTransactions() {
   const q = document.getElementById('tx-search').value.toLowerCase();
   const t = document.getElementById('tx-type-filter').value;
