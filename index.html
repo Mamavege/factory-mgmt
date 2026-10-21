@@ -4862,8 +4862,8 @@ async function costingOpenMonth(id) {
   document.getElementById('costing-semi-fg-tbody').innerHTML = COSTING_SEMI_FG.map(sf => {
     const d = sfMap[sf.code] || {};
     const prev = prevSfMap[sf.code] || {};
-    const potsVal = d.pots ?? prev.pots ?? '';
-    const outVal  = d.output_units ?? prev.output_units ?? '';
+    const potsVal = (d.pots > 0 ? d.pots : null) ?? (prev.pots > 0 ? prev.pots : null) ?? '';
+    const outVal  = (d.output_units > 0 ? d.output_units : null) ?? (prev.output_units > 0 ? prev.output_units : null) ?? '';
     const bom = costingBOM[sf.code] || [];
     const hasRmBOM = bom.some(b => b.category === 'raw_material');
     const hasPkBOM = bom.some(b => b.category === 'packaging');
@@ -4908,7 +4908,7 @@ async function costingOpenMonth(id) {
   document.getElementById('costing-fg-tbody').innerHTML = COSTING_FG.map(fg => {
     const d = fgMap[fg.code] || {};
     const prevFg = prevFgMap[fg.code] || {};
-    const fgOutVal = d.output_units ?? prevFg.output_units ?? '';
+    const fgOutVal = (d.output_units > 0 ? d.output_units : null) ?? (prevFg.output_units > 0 ? prevFg.output_units : null) ?? '';
     const sfBadges = fg.semiFG.map(c=>`<span class="badge badge-gray" style="font-size:10px;margin:1px">${c}</span>`).join('');
     const fgBom = costingBOM[fg.code] || [];
     const hasFgRmBOM = fgBom.some(b => b.category === 'raw_material');
