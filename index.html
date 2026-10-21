@@ -1464,6 +1464,7 @@
         <label>Stock In Source</label>
         <select id="tx-source">
           <option value="production">Production Output</option>
+          <option value="outsource">Outsource (subcon)</option>
           <option value="return">Return</option>
           <option value="adjustment">Stock Adjustment</option>
         </select>
@@ -2040,6 +2041,13 @@ function onChartPeriodChange() {
   if (cr) cr.style.display = v==='custom' ? 'flex' : 'none';
   if (v !== 'custom') renderProductionChart();
 }
+// Outsourced finished goods: tagged source='outsource', or a stock-in whose reason names a known subcon vendor
+const OUTSOURCE_VENDORS = ['QQ FOODS PRODUCT'];
+function isOutsourceTx(x){
+  if ((x.source||'')==='outsource') return true;
+  const r=(x.reason||'').toUpperCase();
+  return OUTSOURCE_VENDORS.some(v=>r.includes(v));
+}
 async function renderProductionChart() {
   const period = document.getElementById('chart-period')?.value || '30';
   // Pull from Packing WIP output (more accurate than stock-in, which can include returns)
@@ -2064,6 +2072,25 @@ async function renderProductionChart() {
     const key = x.product_name || 'Unknown';
     totals[key] = (totals[key]||0) + (parseFloat(x.output_kg)||0);
   });
+  // Add OUTSOURCE output: finished goods stocked in from a subcon (source='outsource' or reason matches a vendor)
+  let outQuery = sb.from('stock_transactions')
+    .select('quantity, created_at, source, reason, item:inventory!item_id(item_name)')
+    .eq('type','in').is('deleted_at',null);
+  if (period === 'custom') {
+    const from = document.getElementById('chart-date-from')?.value;
+    const to = document.getElementById('chart-date-to')?.value;
+    if (from) outQuery = outQuery.gte('created_at', from+'T00:00:00');
+    if (to) outQuery = outQuery.lte('created_at', to+'T23:59:59');
+  } else {
+    const since = new Date(Date.now() - parseInt(period)*86400000).toISOString().slice(0,10);
+    outQuery = outQuery.gte('created_at', since+'T00:00:00');
+  }
+  const { data: outRows } = await outQuery;
+  (outRows||[]).forEach(x => {
+    if (!isOutsourceTx(x)) return;
+    const key = (x.item?.item_name || 'Unknown') + ' (Outsource)';
+    totals[key] = (totals[key]||0) + (parseFloat(x.quantity)||0);
+  });
   const entries = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
   const grandTotal = entries.reduce((s,[,q])=>s+q, 0);
   const container = document.getElementById('production-chart');
@@ -2076,7 +2103,7 @@ async function renderProductionChart() {
   const colors = ['#6c63ff','#ff6584','#43c6a8','#f59e0b','#3b82f6','#ef4444','#10b981','#8b5cf6','#f97316','#06b6d4'];
   container.innerHTML = `
     <div style="text-align:right;margin-bottom:12px;font-size:13px;color:var(--text-muted)">
-      Total Packing Output: <strong style="color:var(--accent);font-size:15px">${grandTotal.toLocaleString()} units</strong>
+      Total Output (packing + outsource): <strong style="color:var(--accent);font-size:15px">${grandTotal.toLocaleString()} units</strong>
     </div>
     <div style="overflow-x:auto"><div style="min-width:${Math.max(entries.length*100,400)}px">
     <div style="display:flex;align-items:flex-end;gap:12px;height:220px;padding-bottom:8px;border-bottom:2px solid var(--border)">
