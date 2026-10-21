@@ -4805,6 +4805,27 @@ async function costingOpenMonth(id) {
   ]);
   if (!month) return toast('Record not found', 'error');
 
+  // Fetch previous month's entries to pre-fill pots/output for new months
+  let prevSfMap = {}, prevFgMap = {};
+  const isNewSf = !(sfData||[]).length;
+  const isNewFg = !(fgData||[]).length;
+  if (isNewSf || isNewFg) {
+    const { data: prevMonths } = await sb.from('costing_months')
+      .select('id')
+      .or(`year.lt.${month.year},and(year.eq.${month.year},month.lt.${month.month})`)
+      .order('year', { ascending: false }).order('month', { ascending: false })
+      .limit(1);
+    if (prevMonths?.length) {
+      const prevId = prevMonths[0].id;
+      const [{ data: prevSf }, { data: prevFg }] = await Promise.all([
+        isNewSf ? sb.from('costing_semi_fg_entries').select('code,pots,output_units').eq('month_id', prevId) : Promise.resolve({ data: [] }),
+        isNewFg ? sb.from('costing_fg_entries').select('code,output_units').eq('month_id', prevId) : Promise.resolve({ data: [] }),
+      ]);
+      (prevSf||[]).forEach(r => { prevSfMap[r.code] = r; });
+      (prevFg||[]).forEach(r => { prevFgMap[r.code] = r; });
+    }
+  }
+
   // Load BOM, materials list, and prices
   await Promise.all([costingLoadBOM(), costingLoadAllMaterials()]);
   await costingLoadPrices(id);
@@ -4840,6 +4861,9 @@ async function costingOpenMonth(id) {
   // Semi FG table — rows with BOM auto-calc for raw mat, packaging, cooking gas
   document.getElementById('costing-semi-fg-tbody').innerHTML = COSTING_SEMI_FG.map(sf => {
     const d = sfMap[sf.code] || {};
+    const prev = prevSfMap[sf.code] || {};
+    const potsVal = d.pots ?? prev.pots ?? '';
+    const outVal  = d.output_units ?? prev.output_units ?? '';
     const bom = costingBOM[sf.code] || [];
     const hasRmBOM = bom.some(b => b.category === 'raw_material');
     const hasPkBOM = bom.some(b => b.category === 'packaging');
@@ -4869,8 +4893,8 @@ async function costingOpenMonth(id) {
     return `<tr>
       <td><span class="badge badge-purple">${sf.code}</span>${expandBtn}</td>
       <td style="white-space:nowrap;font-size:12px"><a href="#" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:3px" onclick="costingOpenProduct('semi','${sf.code}');event.preventDefault()">${sf.name}</a></td>
-      <td><input type="number" class="costing-input" id="sf-pots-${sf.code}" value="${d.pots||''}" placeholder="0" min="0" oninput="costingCalcSemiFGRow('${sf.code}');costingCalcResults();costingScheduleAutoSave()"></td>
-      <td><input type="number" class="costing-input" id="sf-out-${sf.code}" value="${d.output_units||''}" placeholder="0" min="0" oninput="costingCalcSemiFGRow('${sf.code}');costingCalcResults();costingScheduleAutoSave()"></td>
+      <td><input type="number" class="costing-input" id="sf-pots-${sf.code}" value="${potsVal}" placeholder="0" min="0" oninput="costingCalcSemiFGRow('${sf.code}');costingCalcResults();costingScheduleAutoSave()"></td>
+      <td><input type="number" class="costing-input" id="sf-out-${sf.code}" value="${outVal}" placeholder="0" min="0" oninput="costingCalcSemiFGRow('${sf.code}');costingCalcResults();costingScheduleAutoSave()"></td>
       ${rmCell}
       ${pkCell}
       ${trCell}
@@ -4883,6 +4907,8 @@ async function costingOpenMonth(id) {
   // FG table
   document.getElementById('costing-fg-tbody').innerHTML = COSTING_FG.map(fg => {
     const d = fgMap[fg.code] || {};
+    const prevFg = prevFgMap[fg.code] || {};
+    const fgOutVal = d.output_units ?? prevFg.output_units ?? '';
     const sfBadges = fg.semiFG.map(c=>`<span class="badge badge-gray" style="font-size:10px;margin:1px">${c}</span>`).join('');
     const fgBom = costingBOM[fg.code] || [];
     const hasFgRmBOM = fgBom.some(b => b.category === 'raw_material');
@@ -4901,7 +4927,7 @@ async function costingOpenMonth(id) {
       <td style="white-space:nowrap"><span class="badge badge-info">${fg.code}</span>${fg.outsourced?` <span class="badge badge-warning" style="font-size:10px">Outsourced</span>`:''}</td>
       <td style="font-size:12px;min-width:180px"><a href="#" style="color:var(--text);text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:3px" onclick="costingOpenProduct('fg','${fg.code}');event.preventDefault()">${fg.name}</a></td>
       <td style="max-width:160px">${sfBadges||'<span style="color:var(--text-muted);font-size:11px">—</span>'}</td>
-      <td><input type="number" class="costing-input" id="fg-out-${fg.code}" value="${d.output_units||''}" placeholder="0" min="0" oninput="costingCalcResults();costingScheduleAutoSave()"></td>
+      <td><input type="number" class="costing-input" id="fg-out-${fg.code}" value="${fgOutVal}" placeholder="0" min="0" oninput="costingCalcResults();costingScheduleAutoSave()"></td>
       ${rmCell}
       ${pkCell}
       ${fgTrCell}
