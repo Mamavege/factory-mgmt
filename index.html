@@ -1760,8 +1760,12 @@
             onblur="setTimeout(()=>{const d=document.getElementById('bom-new-mat-dropdown');if(d)d.style.display='none'},150)">
           <div id="bom-new-mat-dropdown" style="display:none;position:absolute;z-index:9999;left:0;right:0;top:100%;background:var(--card);border:1px solid var(--border);border-radius:7px;max-height:180px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.18)"></div>
           <input type="hidden" id="bom-new-material-id">
+          <input type="hidden" id="bom-new-material-uom">
         </div>
-        <input type="number" id="bom-new-qty" class="form-control" placeholder="Qty/Pot" step="0.001" min="0" style="font-size:13px">
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <label id="bom-new-qty-label" style="font-size:10px;color:var(--text-muted);font-weight:600">QTY</label>
+          <input type="number" id="bom-new-qty" class="form-control" placeholder="0" step="0.001" min="0" style="font-size:13px">
+        </div>
         <input type="number" id="bom-new-yield" class="form-control" placeholder="Yield %" step="0.1" min="0" max="100" style="font-size:13px">
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -5836,9 +5840,11 @@ async function costingOpenBOMEditor(code, name) {
   document.getElementById('bom-editor-title').textContent = `Edit BOM — ${name}`;
   document.getElementById('bom-editor-add-row').style.display = 'none';
   document.getElementById('bom-new-material-id').value = '';
+  document.getElementById('bom-new-material-uom').value = '';
   document.getElementById('bom-new-material-search').value = '';
   document.getElementById('bom-new-qty').value = '';
   document.getElementById('bom-new-yield').value = '';
+  document.getElementById('bom-new-qty-label').textContent = 'QTY';
   await costingBOMEditorLoad(code);
   openModal('modal-bom-editor');
 }
@@ -5892,7 +5898,7 @@ function costingBOMMatSearch(q) {
   dd.style.display = '';
   dd.innerHTML = filtered.map(m =>
     `<div style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)"
-       onmousedown="document.getElementById('bom-new-material-search').value='${m.name.replace(/'/g,"\\'")}';document.getElementById('bom-new-material-id').value='${m.id}';document.getElementById('bom-new-mat-dropdown').style.display='none'"
+       onmousedown="document.getElementById('bom-new-material-search').value='${m.name.replace(/'/g,"\\'")}';document.getElementById('bom-new-material-id').value='${m.id}';document.getElementById('bom-new-material-uom').value='${m.uom}';document.getElementById('bom-new-qty-label').textContent='QTY (${m.uom})';document.getElementById('bom-new-mat-dropdown').style.display='none'"
      >${m.name} <span style="color:var(--text-muted);font-size:11px">${m.uom}</span></div>`
   ).join('');
 }
@@ -5905,7 +5911,7 @@ async function costingBOMEditorSaveNewRow() {
   const yield_rate = Number(document.getElementById('bom-new-yield').value) || null;
 
   if (!material_id) return toast('Please select a material', 'error');
-  if (!qty_per_pot) return toast('Qty/Pot is required', 'error');
+  if (!qty_per_pot) return toast('Qty is required', 'error');
 
   const { data, error } = await sb.from('costing_bom')
     .insert({ product_code: _bomEditorCode, material_id, category, qty_per_pot, yield_rate })
@@ -5922,9 +5928,11 @@ async function costingBOMEditorSaveNewRow() {
   costingBOMEditorRender();
   document.getElementById('bom-editor-add-row').style.display = 'none';
   document.getElementById('bom-new-material-id').value = '';
+  document.getElementById('bom-new-material-uom').value = '';
   document.getElementById('bom-new-material-search').value = '';
   document.getElementById('bom-new-qty').value = '';
   document.getElementById('bom-new-yield').value = '';
+  document.getElementById('bom-new-qty-label').textContent = 'QTY';
   toast('Row added', 'success');
 }
 
