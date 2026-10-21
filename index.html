@@ -4805,10 +4805,10 @@ async function costingOpenMonth(id) {
   ]);
   if (!month) return toast('Record not found', 'error');
 
-  // Fetch previous month's entries to pre-fill pots/output for new months
+  // Fetch previous month's entries to pre-fill pots/output when all values are blank/zero
   let prevSfMap = {}, prevFgMap = {};
-  const isNewSf = !(sfData||[]).length;
-  const isNewFg = !(fgData||[]).length;
+  const isNewSf = !(sfData||[]).some(r => (r.pots > 0) || (r.output_units > 0));
+  const isNewFg = !(fgData||[]).some(r => r.output_units > 0);
   if (isNewSf || isNewFg) {
     const { data: prevMonths } = await sb.from('costing_months')
       .select('id')
