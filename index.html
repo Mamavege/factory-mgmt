@@ -2041,12 +2041,16 @@ function onChartPeriodChange() {
   if (cr) cr.style.display = v==='custom' ? 'flex' : 'none';
   if (v !== 'custom') renderProductionChart();
 }
-// Outsourced finished goods: tagged source='outsource', or a stock-in whose reason names a known subcon vendor
+// Outsourced finished goods: tagged source='outsource', reason names a known subcon vendor,
+// or the item itself is always outsourced (by name keyword).
 const OUTSOURCE_VENDORS = ['QQ FOODS PRODUCT'];
+const OUTSOURCE_ITEMS = ['SPICY MALA DRY BROAD NOODLE', 'SPICY MALA SOUP BROAD NOODLE'];
 function isOutsourceTx(x){
   if ((x.source||'')==='outsource') return true;
   const r=(x.reason||'').toUpperCase();
-  return OUTSOURCE_VENDORS.some(v=>r.includes(v));
+  if (OUTSOURCE_VENDORS.some(v=>r.includes(v))) return true;
+  const nm=(x.item?.item_name||'').toUpperCase();
+  return OUTSOURCE_ITEMS.some(v=>nm.includes(v.toUpperCase()));
 }
 async function renderProductionChart() {
   const period = document.getElementById('chart-period')?.value || '30';
