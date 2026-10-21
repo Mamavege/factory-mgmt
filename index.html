@@ -656,6 +656,12 @@
           <input type="date" class="filter-select" id="tx-date-from" onchange="reloadTransactions()" title="From date">
           <input type="date" class="filter-select" id="tx-date-to" onchange="reloadTransactions()" title="To date">
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap;cursor:pointer"><input type="checkbox" id="tx-show-deleted" checked onchange="filterTransactions()"> Show Deleted</label>
+          <select class="filter-select" id="tx-page-size" onchange="txSetPageSize()" title="Rows per page">
+            <option value="100">100 / page</option>
+            <option value="200">200 / page</option>
+            <option value="500" selected>500 / page</option>
+            <option value="1000">1000 / page</option>
+          </select>
           <button class="btn btn-secondary" onclick="exportTransactionsCSV()" style="white-space:nowrap"><i class="ti ti-download"></i> Export CSV</button>
         </div>
         <div class="card">
@@ -664,6 +670,11 @@
               <thead><tr><th>Time</th><th>Type</th><th>Item</th><th>Item Code</th><th>Qty</th><th>UOM</th><th>Reason</th><th>Reference</th><th>By</th><th>Actions</th></tr></thead>
               <tbody id="tx-tbody"></tbody>
             </table>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:10px;border-top:1px solid var(--border)">
+            <button class="btn btn-secondary btn-sm" id="tx-prev" onclick="txPrevPage()"><i class="ti ti-chevron-left"></i> Previous</button>
+            <span id="tx-page-info" style="font-size:13px;color:var(--text-muted)">Page 1</span>
+            <button class="btn btn-secondary btn-sm" id="tx-next" onclick="txNextPage()">Next <i class="ti ti-chevron-right"></i></button>
           </div>
         </div>
       </div>
@@ -2357,27 +2368,40 @@ async function saveReserve() {
 }
 
 // ─── TRANSACTIONS ────────────────────────────────────
+let txPage = 0, txPageSize = 500, txHasMore = false;
 async function loadTransactions() {
+  txPage = 0;
   await fetchTransactions();
   filterTransactions();
 }
-// Fetch from DB. With no date filter → latest 500. With a date range → that whole range (older months included).
+// Fetch one page from DB (newest first), honoring the date range. Paging walks back through older months.
 async function fetchTransactions() {
   const from = document.getElementById('tx-date-from')?.value || '';
   const to   = document.getElementById('tx-date-to')?.value || '';
+  const start = txPage * txPageSize;
   let query = sb.from('stock_transactions').select('*, item:inventory!item_id(item_name,item_code,unit), creator:profiles!created_by(name)').order('created_at',{ascending:false});
-  if (from || to) {
-    if (from) query = query.gte('created_at', from+'T00:00:00');
-    if (to)   query = query.lte('created_at', to+'T23:59:59');
-    query = query.limit(5000);
-  } else {
-    query = query.limit(500);
-  }
+  if (from) query = query.gte('created_at', from+'T00:00:00');
+  if (to)   query = query.lte('created_at', to+'T23:59:59');
+  query = query.range(start, start + txPageSize);   // fetch one extra to detect "has more"
   const { data } = await query;
-  allTransactions = data || [];
+  const rows = data || [];
+  txHasMore = rows.length > txPageSize;
+  allTransactions = rows.slice(0, txPageSize);
+  updateTxPager();
 }
+function updateTxPager() {
+  const info = document.getElementById('tx-page-info'); if (info) info.textContent = 'Page ' + (txPage+1);
+  const prev = document.getElementById('tx-prev'); if (prev) prev.disabled = txPage===0;
+  const next = document.getElementById('tx-next'); if (next) next.disabled = !txHasMore;
+}
+function txSetPageSize() {
+  txPageSize = parseInt(document.getElementById('tx-page-size').value)||500;
+  txPage = 0; fetchTransactions().then(filterTransactions);
+}
+function txPrevPage() { if (txPage>0){ txPage--; fetchTransactions().then(filterTransactions); } }
+function txNextPage() { if (txHasMore){ txPage++; fetchTransactions().then(filterTransactions); } }
 // Re-fetch when the date range changes, then apply the other filters
-async function reloadTransactions() { await fetchTransactions(); filterTransactions(); }
+async function reloadTransactions() { txPage = 0; await fetchTransactions(); filterTransactions(); }
 function getFilteredTransactions() {
   const q = document.getElementById('tx-search').value.toLowerCase();
   const t = document.getElementById('tx-type-filter').value;
