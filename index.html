@@ -1726,6 +1726,56 @@
 </div>
 
 
+<!-- Manage Products Modal -->
+<div class="modal-overlay" id="modal-manage-products">
+  <div class="modal" style="max-width:760px;max-height:90vh;overflow-y:auto">
+    <h2>Manage Products</h2>
+    <div id="manage-products-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-manage-products')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- BOM Editor Modal -->
+<div class="modal-overlay" id="modal-bom-editor">
+  <div class="modal" style="max-width:760px;max-height:90vh;overflow-y:auto">
+    <h2 id="bom-editor-title">Edit BOM</h2>
+    <div id="bom-editor-body"></div>
+    <div style="margin-top:12px">
+      <button class="btn btn-secondary btn-sm" style="width:auto" onclick="costingBOMEditorToggleAddRow()"><i class="ti ti-plus"></i> Add Row</button>
+    </div>
+    <div id="bom-editor-add-row" style="display:none;margin-top:10px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text-muted)">NEW BOM ROW</div>
+      <div style="display:grid;grid-template-columns:140px 1fr 90px 80px;gap:8px;align-items:center;margin-bottom:8px">
+        <select id="bom-new-category" class="form-control" style="font-size:13px">
+          <option value="raw_material">Raw Material</option>
+          <option value="packaging">Packaging</option>
+          <option value="cooking_gas">Utility/Gas</option>
+          <option value="transport">Transport</option>
+        </select>
+        <div style="position:relative">
+          <input type="text" id="bom-new-material-search" class="form-control" placeholder="Search material…" style="font-size:13px"
+            oninput="costingBOMMatSearch(this.value)" onfocus="costingBOMMatSearch(this.value)"
+            onblur="setTimeout(()=>{const d=document.getElementById('bom-new-mat-dropdown');if(d)d.style.display='none'},150)">
+          <div id="bom-new-mat-dropdown" style="display:none;position:absolute;z-index:9999;left:0;right:0;top:100%;background:var(--card);border:1px solid var(--border);border-radius:7px;max-height:180px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.18)"></div>
+          <input type="hidden" id="bom-new-material-id">
+        </div>
+        <input type="number" id="bom-new-qty" class="form-control" placeholder="Qty/Pot" step="0.001" min="0" style="font-size:13px">
+        <input type="number" id="bom-new-yield" class="form-control" placeholder="Yield %" step="0.1" min="0" max="100" style="font-size:13px">
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="costingBOMEditorToggleAddRow()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="costingBOMEditorSaveNewRow()"><i class="ti ti-check"></i> Add Row</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-bom-editor')">Close</button>
+      <button class="btn btn-primary" style="width:auto" onclick="costingBOMEditorSaveAll()"><i class="ti ti-device-floppy"></i> Save BOM</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"><i class="ti ti-check"></i> <span id="toast-msg"></span></div>
 
@@ -1974,7 +2024,7 @@ const pageActions = {
   inventory: () => currentProfile?.role==='admin' ? `<button class="btn btn-secondary" style="width:auto" onclick="recalcInventory()"><i class="ti ti-calculator"></i> Recalculate</button> <button class="btn btn-primary" style="width:auto" onclick="openInvModal()"><i class="ti ti-plus"></i> New Item</button>` : '',
   transactions: () => `<button class="btn btn-primary" style="width:auto" onclick="openTxModal()"><i class="ti ti-plus"></i> New Transaction</button>`,
   wip: () => '',
-  costing: () => `<button class="btn btn-primary" style="width:auto" onclick="costingNewMonth()"><i class="ti ti-plus"></i> New Month</button>`,
+  costing: () => `<button class="btn btn-secondary" style="width:auto" onclick="costingOpenManageProducts()"><i class="ti ti-settings"></i> Manage Products</button> <button class="btn btn-primary" style="width:auto" onclick="costingNewMonth()"><i class="ti ti-plus"></i> New Month</button>`,
   rawmat: () => `<button class="btn btn-secondary" style="width:auto" onclick="openRMStockModal()"><i class="ti ti-arrows-exchange"></i> Stock In/Out</button> <button class="btn btn-primary" style="width:auto" onclick="openRMModal()"><i class="ti ti-plus"></i> New Material</button>`,
   purchasing: () => `<button class="btn btn-secondary" style="width:auto" onclick="openSuppliersModal()"><i class="ti ti-users"></i> Suppliers</button> <button class="btn btn-secondary" style="width:auto" onclick="openQuickReceive()"><i class="ti ti-package-import"></i> Quick Receive</button> <button class="btn btn-primary" style="width:auto" onclick="openPOModal()"><i class="ti ti-plus"></i> New Order</button>`,
 };
@@ -4156,39 +4206,24 @@ async function deletePlan(id) {
 }
 
 // ─── COSTING ────────────────────────────────────────
-const COSTING_SEMI_FG = [
-  { code: 'SP',    name: 'Soy Sauce Pack 15G' },
-  { code: 'SP20',  name: 'Soy Sauce Pack 20G' },
-  { code: 'TSO',   name: 'Toona Sinensis Oil Pack' },
-  { code: 'GP',    name: 'Garnish Pack (Cabbage)' },
-  { code: 'CLO',   name: 'Chili Lime Oil Pack' },
-  { code: 'SR',    name: 'Sweet Radish' },
-  { code: 'TY250', name: 'Tomyam Paste 250G' },
-  { code: 'TY',    name: 'Tomyam Paste 70G' },
-  { code: 'PC',    name: 'Penang Curry Paste' },
-  { code: 'TM',    name: 'Tomato Paste' },
-  { code: 'GTY',   name: 'Green Tomyam Paste' },
-  { code: 'OAT',   name: 'Oat Milk Powder' },
-  { code: 'VEG',   name: 'Vegetable Pack' },
-  { code: 'DIY',   name: 'DIY Ingredient Pack', manualBomQty: true },
-];
+let COSTING_SEMI_FG = [];
+let COSTING_FG = [];
 
-const COSTING_FG = [
-  { code: 'SHTY', name: 'Self Heating Tomyam Steamboat',                   semiFG: ['TY','DIY'],        outsourced: false },
-  { code: 'SMTS', name: 'Shake Mee Toona Sinensis',                        semiFG: ['SP20','TSO','GP'], outsourced: false },
-  { code: 'SMCL', name: 'Shake Mee Chili Lime',                            semiFG: ['SP','CLO','SR'],   outsourced: false },
-  { code: 'GTSN', name: 'Green Tomyam Soup Noodle with Oat Milk',          semiFG: ['GTY','OAT','VEG'], outsourced: false },
-  { code: 'POGT', name: 'Green Tomyam Bean Vermicelli Soup with Oat Milk', semiFG: ['GTY','OAT','VEG'], outsourced: false },
-  { code: 'KPM',  name: 'Sarawak Kampua Mee',                              semiFG: ['SP','TSO','GP'],   outsourced: true  },
-  { code: 'CLM',  name: 'Kampua Mee Chili Lime',                           semiFG: ['SP','CLO','SR'],   outsourced: true  },
-  { code: 'SHCR', name: 'Self Heating Curry Rice',                         semiFG: ['PC'],              outsourced: false },
-  { code: 'TYSP', name: 'Tomyam Steamboat Paste',                          semiFG: ['TY250'],           outsourced: false },
-  { code: 'TMSP', name: 'Tomato Steamboat Paste',                          semiFG: ['TM'],              outsourced: false },
-  { code: 'MALA(PC)',  name: 'Mala Soy Protein Meat (PC)',  semiFG: [], outsourced: false, noSharedCosts: true },
-  { code: 'BBQ(PC)',   name: 'BBQ Soy Protein Meat (PC)',   semiFG: [], outsourced: false, noSharedCosts: true },
-  { code: 'MALA(BOX)', name: 'Mala Soy Protein Meat (BOX)', semiFG: [], outsourced: false, noSharedCosts: true },
-  { code: 'BBQ(BOX)',  name: 'BBQ Soy Protein Meat (BOX)',  semiFG: [], outsourced: false, noSharedCosts: true },
-];
+async function costingLoadProducts() {
+  const { data } = await sb.from('costing_products').select('*').order('sort_order');
+  COSTING_SEMI_FG = (data||[]).filter(p => p.type === 'semi_fg').map(p => ({
+    code: p.code,
+    name: p.name,
+    manualBomQty: p.manual_bom_qty || false,
+  }));
+  COSTING_FG = (data||[]).filter(p => p.type === 'fg').map(p => ({
+    code: p.code,
+    name: p.name,
+    semiFG: p.semi_fg_components || [],
+    outsourced: p.outsourced || false,
+    noSharedCosts: p.no_shared_costs || false,
+  }));
+}
 
 const MONTH_NAMES = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 let costingCurrentMonthId = null;
@@ -4267,6 +4302,8 @@ async function costingLoad() {
   document.getElementById('costing-list-view').style.display = 'block';
   document.getElementById('costing-detail-view').style.display = 'none';
   document.getElementById('costing-product-view').style.display = 'none';
+
+  await costingLoadProducts();
 
   const { data, error } = await sb.from('costing_months').select('*').order('year',{ascending:false}).order('month',{ascending:false});
   if (error) { console.error(error); return; }
@@ -4797,6 +4834,7 @@ async function costingDeletePurchaseRecord(id) {
 
 async function costingOpenMonth(id) {
   costingCurrentMonthId = id;
+  await costingLoadProducts();
 
   const [{ data: month }, { data: sfData }, { data: fgData }] = await Promise.all([
     sb.from('costing_months').select('*').eq('id',id).single(),
@@ -5631,6 +5669,245 @@ function fmtDate(dt) {
 }
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ── Manage Products ─────────────────────────────────────────────────────────
+let _bomEditorCode = null; // current product code in BOM editor
+
+async function costingOpenManageProducts() {
+  await costingLoadProducts();
+  costingRenderManageProducts();
+  openModal('modal-manage-products');
+}
+
+function costingRenderManageProducts() {
+  const catLabel = { raw_material:'Raw Mat', packaging:'Packaging', cooking_gas:'Utility', transport:'Transport' };
+  const sfRows = COSTING_SEMI_FG.map(sf => `
+    <tr>
+      <td><span class="badge badge-purple">${sf.code}</span></td>
+      <td style="font-size:13px">${sf.name}</td>
+      <td style="font-size:11px;color:var(--text-muted)">${sf.manualBomQty ? 'Manual BOM qty' : ''}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-secondary btn-sm" style="width:auto;padding:2px 8px;font-size:11px" onclick="costingOpenBOMEditor('${sf.code}','${sf.name.replace(/'/g,"\\'")}')"><i class="ti ti-list-details"></i> Edit BOM</button>
+        <button class="btn btn-secondary btn-sm" style="width:auto;padding:2px 8px;font-size:11px;color:#dc2626;border-color:#dc2626" onclick="costingDeleteProduct('${sf.code}','semi_fg')"><i class="ti ti-trash"></i></button>
+      </td>
+    </tr>`).join('');
+
+  const fgRows = COSTING_FG.map(fg => `
+    <tr>
+      <td><span class="badge badge-info">${fg.code}</span></td>
+      <td style="font-size:13px">${fg.name}</td>
+      <td style="font-size:11px;color:var(--text-muted)">${[fg.outsourced?'Outsourced':'', fg.noSharedCosts?'No shared costs':''].filter(Boolean).join(', ')||'—'}<br>${fg.semiFG.length?fg.semiFG.map(c=>`<span class="badge badge-gray" style="font-size:10px">${c}</span>`).join(' '):'no components'}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-secondary btn-sm" style="width:auto;padding:2px 8px;font-size:11px" onclick="costingOpenBOMEditor('${fg.code}','${fg.name.replace(/'/g,"\\'")}')"><i class="ti ti-list-details"></i> Edit BOM</button>
+        <button class="btn btn-secondary btn-sm" style="width:auto;padding:2px 8px;font-size:11px;color:#dc2626;border-color:#dc2626" onclick="costingDeleteProduct('${fg.code}','fg')"><i class="ti ti-trash"></i></button>
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('manage-products-body').innerHTML = `
+    <div style="margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-weight:700;font-size:13px;color:var(--text-muted);letter-spacing:.05em">SEMI FG PRODUCTS</div>
+        <button class="btn btn-primary btn-sm" style="width:auto" onclick="costingShowNewProductForm('semi_fg')"><i class="ti ti-plus"></i> New Semi FG</button>
+      </div>
+      <table class="table" style="font-size:13px"><tbody>${sfRows||'<tr><td colspan="4" style="color:var(--text-muted);text-align:center">No semi-FG products</td></tr>'}</tbody></table>
+    </div>
+    <div id="new-product-form-container"></div>
+    <div style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-weight:700;font-size:13px;color:var(--text-muted);letter-spacing:.05em">FG PRODUCTS</div>
+        <button class="btn btn-primary btn-sm" style="width:auto" onclick="costingShowNewProductForm('fg')"><i class="ti ti-plus"></i> New FG</button>
+      </div>
+      <table class="table" style="font-size:13px"><tbody>${fgRows||'<tr><td colspan="4" style="color:var(--text-muted);text-align:center">No FG products</td></tr>'}</tbody></table>
+    </div>`;
+}
+
+let _newProductFormType = null;
+function costingShowNewProductForm(type) {
+  _newProductFormType = type;
+  const isFG = type === 'fg';
+  const sfOptions = COSTING_SEMI_FG.map(sf => `<option value="${sf.code}">${sf.code} — ${sf.name}</option>`).join('');
+  document.getElementById('new-product-form-container').innerHTML = `
+    <div style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--text-muted)">${isFG ? 'NEW FG PRODUCT' : 'NEW SEMI FG PRODUCT'}</div>
+      <div style="display:grid;grid-template-columns:120px 1fr;gap:8px;margin-bottom:8px">
+        <input type="text" id="np-code" class="form-control" placeholder="Code (e.g. DN18)" style="font-size:13px;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+        <input type="text" id="np-name" class="form-control" placeholder="Product name" style="font-size:13px">
+      </div>
+      ${isFG ? `
+      <div style="margin-bottom:8px">
+        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Semi FG Components</label>
+        <select id="np-semifg" multiple class="form-control" style="font-size:12px;min-height:80px">${sfOptions}</select>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Hold Ctrl/Cmd to select multiple</div>
+      </div>
+      <div style="display:flex;gap:16px;margin-bottom:8px;font-size:13px">
+        <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="np-outsourced"> Outsourced</label>
+        <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="np-noshared"> No Shared Costs</label>
+      </div>` : `
+      <div style="margin-bottom:8px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="np-manualbom"> Manual BOM Qty (custom qty per BOM row)</label>
+      </div>`}
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('new-product-form-container').innerHTML=''">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="costingSaveNewProduct()"><i class="ti ti-check"></i> Save Product</button>
+      </div>
+    </div>`;
+}
+
+async function costingSaveNewProduct() {
+  const code = (document.getElementById('np-code')?.value || '').trim().toUpperCase();
+  const name = (document.getElementById('np-name')?.value || '').trim();
+  if (!code) return toast('Product code is required', 'error');
+  if (!name) return toast('Product name is required', 'error');
+  const type = _newProductFormType;
+  const isFG = type === 'fg';
+  const semi_fg_components = isFG
+    ? Array.from(document.getElementById('np-semifg')?.selectedOptions || []).map(o => o.value)
+    : [];
+  const outsourced = isFG ? (document.getElementById('np-outsourced')?.checked || false) : false;
+  const no_shared_costs = isFG ? (document.getElementById('np-noshared')?.checked || false) : false;
+  const manual_bom_qty = !isFG ? (document.getElementById('np-manualbom')?.checked || false) : false;
+  const sort_order = (isFG ? COSTING_FG.length : COSTING_SEMI_FG.length) + 1;
+
+  const { error } = await sb.from('costing_products').insert({ code, name, type, semi_fg_components, outsourced, no_shared_costs, manual_bom_qty, sort_order });
+  if (error) {
+    if (error.code === '23505') return toast(`Code "${code}" already exists`, 'error');
+    return toast('Error: ' + error.message, 'error');
+  }
+  toast(`"${name}" added`, 'success');
+  await costingLoadProducts();
+  costingRenderManageProducts();
+}
+
+async function costingDeleteProduct(code, type) {
+  if (!confirm(`Delete product "${code}"? This will also delete all its BOM rows. This cannot be undone.`)) return;
+  await sb.from('costing_bom').delete().eq('product_code', code);
+  const { error } = await sb.from('costing_products').delete().eq('code', code);
+  if (error) return toast('Error: ' + error.message, 'error');
+  toast(`"${code}" deleted`, 'success');
+  await costingLoadProducts();
+  costingRenderManageProducts();
+}
+
+// ── BOM Editor ───────────────────────────────────────────────────────────────
+let _bomEditorRows = [];
+
+async function costingOpenBOMEditor(code, name) {
+  _bomEditorCode = code;
+  document.getElementById('bom-editor-title').textContent = `Edit BOM — ${name}`;
+  document.getElementById('bom-editor-add-row').style.display = 'none';
+  document.getElementById('bom-new-material-id').value = '';
+  document.getElementById('bom-new-material-search').value = '';
+  document.getElementById('bom-new-qty').value = '';
+  document.getElementById('bom-new-yield').value = '';
+  await costingBOMEditorLoad(code);
+  openModal('modal-bom-editor');
+}
+
+async function costingBOMEditorLoad(code) {
+  const { data } = await sb.from('costing_bom')
+    .select('*, costing_materials(id, name, uom, category)')
+    .eq('product_code', code)
+    .order('category');
+  _bomEditorRows = (data||[]).map(r => ({
+    id: r.id,
+    material_id: r.material_id,
+    material_name: r.costing_materials?.name || '',
+    uom: r.costing_materials?.uom || '',
+    category: r.category,
+    qty_per_pot: r.qty_per_pot,
+    yield_rate: r.yield_rate,
+  }));
+  costingBOMEditorRender();
+}
+
+function costingBOMEditorRender() {
+  const catLabel = { raw_material:'Raw Mat', packaging:'Packaging', cooking_gas:'Utility/Gas', transport:'Transport' };
+  const rows = _bomEditorRows.map((r, i) => `
+    <tr>
+      <td><span class="badge ${r.category==='raw_material'?'badge-purple':r.category==='packaging'?'badge-info':r.category==='transport'?'badge-warning':'badge-gray'}" style="font-size:10px">${catLabel[r.category]||r.category}</span></td>
+      <td style="font-size:13px">${r.material_name} <span style="color:var(--text-muted);font-size:11px">${r.uom}</span></td>
+      <td><input type="number" class="costing-input" style="width:90px" value="${r.qty_per_pot||''}" placeholder="0" step="0.001" min="0" onchange="_bomEditorRows[${i}].qty_per_pot=Number(this.value)"></td>
+      <td><input type="number" class="costing-input" style="width:70px" value="${r.yield_rate||''}" placeholder="100" step="0.1" min="0" max="100" onchange="_bomEditorRows[${i}].yield_rate=Number(this.value)||null"></td>
+      <td><button class="btn btn-secondary btn-sm" style="padding:2px 6px;color:#dc2626;border-color:#dc2626" onclick="costingBOMEditorDeleteRow(${i})"><i class="ti ti-trash"></i></button></td>
+    </tr>`).join('');
+
+  document.getElementById('bom-editor-body').innerHTML = rows
+    ? `<table class="table" style="font-size:13px">
+        <thead><tr><th>Category</th><th>Material</th><th>Qty/Pot</th><th>Yield %</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+       </table>`
+    : `<div style="color:var(--text-muted);font-size:13px;padding:12px 0">No BOM rows yet. Click "+ Add Row" to add materials.</div>`;
+}
+
+function costingBOMEditorToggleAddRow() {
+  const el = document.getElementById('bom-editor-add-row');
+  el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+function costingBOMMatSearch(q) {
+  const dd = document.getElementById('bom-new-mat-dropdown');
+  if (!dd) return;
+  const filtered = costingAllMaterials.filter(m => m.name.toLowerCase().includes(q.toLowerCase())).slice(0, 30);
+  if (!filtered.length) { dd.style.display = 'none'; return; }
+  dd.style.display = '';
+  dd.innerHTML = filtered.map(m =>
+    `<div style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)"
+       onmousedown="document.getElementById('bom-new-material-search').value='${m.name.replace(/'/g,"\\'")}';document.getElementById('bom-new-material-id').value='${m.id}';document.getElementById('bom-new-mat-dropdown').style.display='none'"
+     >${m.name} <span style="color:var(--text-muted);font-size:11px">${m.uom}</span></div>`
+  ).join('');
+}
+
+async function costingBOMEditorSaveNewRow() {
+  const material_id = document.getElementById('bom-new-material-id').value;
+  const matName = document.getElementById('bom-new-material-search').value.trim();
+  const category = document.getElementById('bom-new-category').value;
+  const qty_per_pot = Number(document.getElementById('bom-new-qty').value) || 0;
+  const yield_rate = Number(document.getElementById('bom-new-yield').value) || null;
+
+  if (!material_id) return toast('Please select a material', 'error');
+  if (!qty_per_pot) return toast('Qty/Pot is required', 'error');
+
+  const { data, error } = await sb.from('costing_bom')
+    .insert({ product_code: _bomEditorCode, material_id, category, qty_per_pot, yield_rate })
+    .select('*, costing_materials(id,name,uom,category)')
+    .single();
+  if (error) {
+    if (error.code === '23505') return toast('This material already exists in this BOM category', 'error');
+    return toast('Error: ' + error.message, 'error');
+  }
+  _bomEditorRows.push({
+    id: data.id, material_id, material_name: data.costing_materials?.name || matName,
+    uom: data.costing_materials?.uom || '', category, qty_per_pot, yield_rate,
+  });
+  costingBOMEditorRender();
+  document.getElementById('bom-editor-add-row').style.display = 'none';
+  document.getElementById('bom-new-material-id').value = '';
+  document.getElementById('bom-new-material-search').value = '';
+  document.getElementById('bom-new-qty').value = '';
+  document.getElementById('bom-new-yield').value = '';
+  toast('Row added', 'success');
+}
+
+async function costingBOMEditorDeleteRow(idx) {
+  const row = _bomEditorRows[idx];
+  if (!row) return;
+  if (!confirm(`Remove "${row.material_name}" from BOM?`)) return;
+  if (row.id) await sb.from('costing_bom').delete().eq('id', row.id);
+  _bomEditorRows.splice(idx, 1);
+  costingBOMEditorRender();
+  toast('Row removed', 'success');
+}
+
+async function costingBOMEditorSaveAll() {
+  const updates = _bomEditorRows.filter(r => r.id).map(r =>
+    sb.from('costing_bom').update({ qty_per_pot: r.qty_per_pot, yield_rate: r.yield_rate }).eq('id', r.id)
+  );
+  await Promise.all(updates);
+  toast('BOM saved', 'success');
+  closeModal('modal-bom-editor');
+  // Reload BOM in memory if a month is open
+  if (costingCurrentMonthId) await costingLoadBOM();
+}
 document.querySelectorAll('.modal-overlay').forEach(m =>
   m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); })
 );
