@@ -4353,6 +4353,21 @@ async function costingNewMonth() {
 async function costingLoadAllMaterials() {
   const { data } = await sb.from('costing_materials').select('id, name, uom, category, item_code').order('name');
   costingAllMaterials = data || [];
+  await costingRunItemCodeMigrations(costingAllMaterials);
+}
+
+async function costingRunItemCodeMigrations(materials) {
+  const patches = [
+    { name: 'GUOZIJIA Plain Noodle 1.8 mm', item_code: 'G00214' },
+    { name: 'GUOZIJIA Plain Noodle 2.2 mm', item_code: 'G00215' },
+  ];
+  for (const patch of patches) {
+    const mat = materials.find(m => m.name === patch.name);
+    if (mat && mat.item_code !== patch.item_code) {
+      await sb.from('costing_materials').update({ item_code: patch.item_code }).eq('id', mat.id);
+      mat.item_code = patch.item_code;
+    }
+  }
 }
 
 async function costingLoadBOM() {
