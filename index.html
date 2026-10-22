@@ -5847,6 +5847,8 @@ let _bomEditorRows = [];
 
 async function costingOpenBOMEditor(code, name) {
   _bomEditorCode = code;
+  // Ensure materials are loaded (may not be if opened from Manage Products outside a month)
+  if (!costingAllMaterials.length) await costingLoadAllMaterials();
   document.getElementById('bom-editor-title').textContent = `Edit BOM — ${name}`;
   document.getElementById('bom-editor-add-row').style.display = 'none';
   document.getElementById('bom-new-material-id').value = '';
