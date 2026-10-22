@@ -6051,8 +6051,11 @@ async function costingBOMEditorSaveAll() {
   await Promise.all(updates);
   toast('BOM saved', 'success');
   closeModal('modal-bom-editor');
-  // Reload BOM in memory if a month is open
-  if (costingCurrentMonthId) await costingLoadBOM();
+  // Reload BOM and prices in memory if a month is open
+  if (costingCurrentMonthId) {
+    await costingLoadBOM();
+    await costingLoadPrices(costingCurrentMonthId);
+  }
 }
 document.querySelectorAll('.modal-overlay').forEach(m =>
   m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); })
