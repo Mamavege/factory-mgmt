@@ -5725,7 +5725,8 @@ function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
 // ── Manage Products ─────────────────────────────────────────────────────────
-let _bomEditorCode = null; // current product code in BOM editor
+let _bomEditorCode = null;
+let _bomEditorType = null; // 'semi_fg' or 'fg'
 
 async function costingOpenManageProducts() {
   await costingLoadProducts();
@@ -5741,7 +5742,7 @@ function costingRenderManageProducts() {
       <td style="font-size:13px">${sf.name}</td>
       <td style="font-size:11px;color:var(--text-muted)">${sf.manualBomQty ? 'Manual BOM qty' : ''}</td>
       <td style="white-space:nowrap">
-        <button class="btn btn-secondary btn-sm" style="width:auto;padding:2px 8px;font-size:11px" onclick="costingOpenBOMEditor('${sf.code}','${sf.name.replace(/'/g,"\\'")}')"><i class="ti ti-list-details"></i> Edit BOM</button>
+        <button class="btn btn-secondary btn-sm" style="width:auto;padding:2px 8px;font-size:11px" onclick="costingOpenBOMEditor('${sf.code}','${sf.name.replace(/'/g,"\\'")}','semi_fg')"><i class="ti ti-list-details"></i> Edit BOM</button>
         <button class="btn btn-secondary btn-sm" style="width:auto;padding:2px 8px;font-size:11px;color:#dc2626;border-color:#dc2626" onclick="costingDeleteProduct('${sf.code}','semi_fg')"><i class="ti ti-trash"></i></button>
       </td>
     </tr>`).join('');
@@ -5752,7 +5753,7 @@ function costingRenderManageProducts() {
       <td style="font-size:13px">${fg.name}</td>
       <td style="font-size:11px;color:var(--text-muted)">${[fg.outsourced?'Outsourced':'', fg.noSharedCosts?'No shared costs':''].filter(Boolean).join(', ')||'—'}<br>${fg.semiFG.length?fg.semiFG.map(c=>`<span class="badge badge-gray" style="font-size:10px">${c}</span>`).join(' '):'no components'}</td>
       <td style="white-space:nowrap">
-        <button class="btn btn-secondary btn-sm" style="width:auto;padding:2px 8px;font-size:11px" onclick="costingOpenBOMEditor('${fg.code}','${fg.name.replace(/'/g,"\\'")}')"><i class="ti ti-list-details"></i> Edit BOM</button>
+        <button class="btn btn-secondary btn-sm" style="width:auto;padding:2px 8px;font-size:11px" onclick="costingOpenBOMEditor('${fg.code}','${fg.name.replace(/'/g,"\\'")}','fg')"><i class="ti ti-list-details"></i> Edit BOM</button>
         <button class="btn btn-secondary btn-sm" style="width:auto;padding:2px 8px;font-size:11px;color:#dc2626;border-color:#dc2626" onclick="costingDeleteProduct('${fg.code}','fg')"><i class="ti ti-trash"></i></button>
       </td>
     </tr>`).join('');
@@ -5845,8 +5846,9 @@ async function costingDeleteProduct(code, type) {
 // ── BOM Editor ───────────────────────────────────────────────────────────────
 let _bomEditorRows = [];
 
-async function costingOpenBOMEditor(code, name) {
+async function costingOpenBOMEditor(code, name, type) {
   _bomEditorCode = code;
+  _bomEditorType = type || (COSTING_SEMI_FG.find(s=>s.code===code) ? 'semi_fg' : 'fg');
   // Ensure materials are loaded (may not be if opened from Manage Products outside a month)
   if (!costingAllMaterials.length) await costingLoadAllMaterials();
   document.getElementById('bom-editor-title').textContent = `Edit BOM — ${name}`;
@@ -5937,7 +5939,7 @@ async function costingBOMEditorSaveNewRow() {
   if (!qty_per_pot) return toast('Qty is required', 'error');
 
   const { data, error } = await sb.from('costing_bom')
-    .insert({ product_code: _bomEditorCode, material_id, category, qty_per_pot, yield_rate })
+    .insert({ product_code: _bomEditorCode, product_type: _bomEditorType, material_id, category, qty_per_pot, yield_rate })
     .select('*, costing_materials(id,name,uom,category)')
     .single();
   if (error) {
