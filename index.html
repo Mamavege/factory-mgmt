@@ -4537,28 +4537,24 @@ async function costingLoadPrices(monthId) {
   const lastKnown   = buildLastKnown(monthlyGroups);
   const lastKnownTr = buildLastKnown(monthlyGroupsTr);
 
-  // Build two separate price maps — packaging/raw/gas vs transport
-  const buildPriceMap = (avgMap, lkMap, mats) => {
+  // Build price maps from ALL materials in purchase records (not limited to BOM materials)
+  const buildPriceMap = (avgMap, lkMap) => {
     const out = {};
-    mats.forEach(mat => {
+    const allMats = new Set([...Object.keys(avgMap), ...Object.keys(lkMap)]);
+    allMats.forEach(mat => {
       const tm = avgMap[mat];
       if (tm && tm.qty > 0) {
         out[mat] = {price: tm.cost/tm.qty, source:'this_month', sourceLabel:'This month (weighted avg)'};
       } else if (lkMap[mat]) {
         const lk = lkMap[mat];
         out[mat] = {price: lk.price, source:'fallback', sourceLabel:`Fallback: ${MONTH_NAMES[lk.month]} ${lk.year}`};
-      } else {
-        out[mat] = {price: 0, source:'missing', sourceLabel:'No price data — enter purchase record'};
       }
     });
     return out;
   };
 
-  const nonTrMats = new Set(Object.values(costingBOM).flat().filter(b => b.category !== 'transport').map(b => b.material_name));
-  const trMats    = new Set(Object.values(costingBOM).flat().filter(b => b.category === 'transport').map(b => b.material_name));
-
-  costingEffectivePrices = buildPriceMap(thisMonthAvg,   lastKnown,   nonTrMats);
-  costingTransportPrices = buildPriceMap(thisMonthAvgTr, lastKnownTr, trMats);
+  costingEffectivePrices = buildPriceMap(thisMonthAvg,   lastKnown);
+  costingTransportPrices = buildPriceMap(thisMonthAvgTr, lastKnownTr);
 }
 
 // Packaging BOM qty is per unit; raw material / cooking_gas BOM qty is per pot
@@ -4686,15 +4682,17 @@ function costingFilterPurchaseRecords() {
 function costingRenderEffectivePrices() {
   const el = document.getElementById('costing-effective-prices');
   if (!el) return;
-  const mats = Object.keys(costingEffectivePrices).sort();
-  if (!mats.length) {
+  // Show all BOM materials, marking ones with no purchase record as missing
+  const bomMats = [...new Set(Object.values(costingBOM).flat().map(b => b.material_name))].sort();
+  const allDisplayMats = [...new Set([...bomMats, ...Object.keys(costingEffectivePrices), ...Object.keys(costingTransportPrices)])].sort();
+  if (!allDisplayMats.length) {
     el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:6px">No BOM materials loaded yet.</div>';
     return;
   }
-  const missingCount = mats.filter(m => costingEffectivePrices[m].source === 'missing').length;
+  const missingCount = bomMats.filter(m => !costingEffectivePrices[m] && !costingTransportPrices[m]).length;
   const warning = missingCount ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:7px;padding:8px 12px;font-size:12px;color:#92400e;margin-bottom:10px"><i class="ti ti-alert-triangle"></i> ${missingCount} material(s) have no price data — BOM auto-calculation will be incomplete.</div>` : '';
-  const rows = mats.map(mat => {
-    const ep = costingEffectivePrices[mat];
+  const rows = allDisplayMats.map(mat => {
+    const ep = costingEffectivePrices[mat] || costingTransportPrices[mat] || {price:0,source:'missing',sourceLabel:'No price data — enter purchase record'};
     const srcColor = ep.source==='this_month'?'var(--success)':ep.source==='fallback'?'#f59e0b':'var(--danger)';
     return `<tr style="border-top:1px solid var(--border)">
       <td style="padding:5px 10px">${mat}</td>
