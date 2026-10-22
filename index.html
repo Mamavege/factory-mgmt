@@ -6006,7 +6006,7 @@ async function costingBOMEditorSaveNewRow() {
   const matName = document.getElementById('bom-new-material-search').value.trim();
   const category = document.getElementById('bom-new-category').value;
   const qty_per_pot = Number(document.getElementById('bom-new-qty').value) || 0;
-  const yield_rate = Number(document.getElementById('bom-new-yield').value) || null;
+  const yield_rate = Number(document.getElementById('bom-new-yield').value) || 100;
 
   if (!material_id) return toast('Please select a material', 'error');
   if (!qty_per_pot) return toast('Qty is required', 'error');
